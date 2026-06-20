@@ -1,0 +1,113 @@
+name: Package managers
+
+# Updates the Homebrew Cask (JoschaP/homebrew-tap) and Scoop manifest
+# (JoschaP/scoop-bucket) for a published release. Reusable (called by the
+# release pipelines) and manually dispatchable for an existing tag.
+#
+# Requires the repo secret PACKAGES_TOKEN: a fine-grained PAT with
+# "Contents: read & write" on homebrew-tap and scoop-bucket. Without it the
+# job logs a warning and skips (so the release itself never fails).
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check for PACKAGES_TOKEN
+        id: guard
+        env:
+          TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::PACKAGES_TOKEN is not set — skipping Homebrew/Scoop update."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout app (for the generator)
+        if: steps.guard.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          path: app
+
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.ok == 'true'
+        with:
+          node-version: 20
+
+      - name: Download release assets
+        if: steps.guard.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p assets
+          gh release download "${{ inputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --dir assets \
+            --pattern '*.dmg' \
+            --pattern '*x64-setup.exe' \
+            --clobber
+
+      - name: Checkout homebrew-tap
+        if: steps.guard.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: JoschaP/homebrew-tap
+          token: ${{ secrets.PACKAGES_TOKEN }}
+          path: homebrew-tap
+
+      - name: Checkout scoop-bucket
+        if: steps.guard.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: JoschaP/scoop-bucket
+          token: ${{ secrets.PACKAGES_TOKEN }}
+          path: scoop-bucket
+
+      - name: Generate manifests
+        if: steps.guard.outputs.ok == 'true'
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          VERSION="${TAG#v}"
+          mkdir -p homebrew-tap/Casks scoop-bucket/bucket
+          node app/scripts/update-packages.mjs "$VERSION" assets \
+            homebrew-tap/Casks/occ-companion.rb \
+            scoop-bucket/bucket/occ-companion.json
+
+      - name: Commit & push Homebrew cask
+        if: steps.guard.outputs.ok == 'true'
+        working-directory: homebrew-tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/occ-companion.rb
+          git diff --cached --quiet || git commit -m "occ-companion ${{ inputs.tag }}"
+          git push
+
+      - name: Commit & push Scoop manifest
+        if: steps.guard.outputs.ok == 'true'
+        working-directory: scoop-bucket
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bucket/occ-companion.json
+          git diff --cached --quiet || git commit -m "occ-companion ${{ inputs.tag }}"
+          git push

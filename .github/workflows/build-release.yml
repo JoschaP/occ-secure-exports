@@ -91,3 +91,10 @@ jobs:
           releaseDraft: false
           prerelease: true
           args: ${{ matrix.args }}
+
+  package-managers:
+    needs: build
+    uses: ./.github/workflows/package-managers.yml
+    with:
+      tag: ${{ inputs.tag }}
+    secrets: inherit

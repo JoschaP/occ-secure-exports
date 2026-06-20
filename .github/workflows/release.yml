@@ -134,3 +134,11 @@ jobs:
           PATHS: ${{ join(fromJSON(steps.tauri.outputs.artifactPaths), '" "') }}
         run: |
           gh release upload "v${{ needs.version.outputs.version }}" "$PATHS" --clobber
+
+  package-managers:
+    needs: [version, build]
+    if: needs.version.outputs.published == 'true'
+    uses: ./.github/workflows/package-managers.yml
+    with:
+      tag: v${{ needs.version.outputs.version }}
+    secrets: inherit

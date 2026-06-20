@@ -29,6 +29,32 @@ back into plaintext, on your machine.
 
 ---
 
+## Install
+
+### Homebrew (macOS)
+
+```bash
+brew install --cask JoschaP/tap/occ-companion
+```
+
+### Scoop (Windows)
+
+```powershell
+scoop bucket add occ-companion https://github.com/JoschaP/scoop-bucket
+scoop install occ-companion
+```
+
+### Direct download
+
+Grab the installer for your OS from the
+[Releases](https://github.com/JoschaP/occ-companion/releases) page —
+`.dmg` (macOS, Apple Silicon + Intel), `.msi`/`.exe` (Windows),
+`.deb`/`.AppImage` (Linux).
+
+> Builds are currently **unsigned**. macOS: right-click the app → **Open** the
+> first time (Gatekeeper). Windows: **More info → Run anyway** (SmartScreen).
+> Installing via Homebrew/Scoop generally avoids these prompts.
+
 ## Security model — your key stays local
 
 This is the whole promise of the product, so it is built to be auditable:
