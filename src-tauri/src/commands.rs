@@ -326,9 +326,15 @@ pub async fn download_decrypt(
         let dest_path = dest.join(download::plaintext_file_name(&key));
         let progress = progress_emitter(app.clone(), key.clone());
 
-        let outcome =
-            download::download_and_decrypt(&client, &bucket, &key, &dest_path, identities.clone(), progress)
-                .await;
+        let outcome = download::download_and_decrypt(
+            &client,
+            &bucket,
+            &key,
+            &dest_path,
+            identities.clone(),
+            progress,
+        )
+        .await;
 
         let result = match outcome {
             Ok(bytes) => FileResult {

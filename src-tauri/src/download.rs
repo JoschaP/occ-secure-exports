@@ -87,7 +87,7 @@ pub async fn download_and_decrypt(
 /// `..\..\evil.age` can never escape the destination directory.
 pub fn plaintext_file_name(key: &str) -> String {
     let last = key
-        .rsplit(|c| c == '/' || c == '\\')
+        .rsplit(['/', '\\'])
         .find(|s| !s.is_empty())
         .unwrap_or(key);
     let stripped = last.strip_suffix(".age").unwrap_or(last);

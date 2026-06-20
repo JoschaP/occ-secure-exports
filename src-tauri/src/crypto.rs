@@ -55,7 +55,8 @@ pub fn parse_identities(material: &str) -> AppResult<Vec<Identity>> {
         }
         if let age::ssh::Identity::Unsupported(_) = ssh {
             return Err(AppError::Key(
-                "This SSH key type is not supported. Use an ed25519 or rsa key, or an age key.".into(),
+                "This SSH key type is not supported. Use an ed25519 or rsa key, or an age key."
+                    .into(),
             ));
         }
         return Ok(vec![Box::new(ssh)]);
@@ -75,7 +76,9 @@ pub fn parse_identities(material: &str) -> AppResult<Vec<Identity>> {
     }
 
     if identities.is_empty() {
-        return Err(AppError::Key("No usable key found in the provided material.".into()));
+        return Err(AppError::Key(
+            "No usable key found in the provided material.".into(),
+        ));
     }
     Ok(identities)
 }
@@ -106,8 +109,7 @@ where
     R: Read,
     W: Write,
 {
-    let decryptor =
-        age::Decryptor::new(src).map_err(|e| AppError::Decrypt(friendly(&e)))?;
+    let decryptor = age::Decryptor::new(src).map_err(|e| AppError::Decrypt(friendly(&e)))?;
 
     let mut reader = decryptor
         .decrypt(identities.iter().map(|i| i.as_ref() as &dyn age::Identity))
@@ -150,12 +152,10 @@ mod tests {
 
     /// Encrypt for an age public key — the test counterpart to decryption.
     pub(super) fn encrypt_for(public_key: &str, plaintext: &[u8]) -> Vec<u8> {
-        let recipient: age::x25519::Recipient =
-            public_key.parse().expect("valid public key");
-        let encryptor = age::Encryptor::with_recipients(std::iter::once(
-            &recipient as &dyn age::Recipient,
-        ))
-        .expect("encryptor");
+        let recipient: age::x25519::Recipient = public_key.parse().expect("valid public key");
+        let encryptor =
+            age::Encryptor::with_recipients(std::iter::once(&recipient as &dyn age::Recipient))
+                .expect("encryptor");
         let mut out = Vec::new();
         let mut writer = encryptor.wrap_output(&mut out).unwrap();
         writer.write_all(plaintext).unwrap();
@@ -166,7 +166,11 @@ mod tests {
     #[test]
     fn keygen_produces_well_formed_keys() {
         let kp = generate_keypair();
-        assert!(kp.public_key.starts_with("age1"), "public: {}", kp.public_key);
+        assert!(
+            kp.public_key.starts_with("age1"),
+            "public: {}",
+            kp.public_key
+        );
         assert!(kp.private_key.starts_with("AGE-SECRET-KEY-1"));
     }
 

@@ -37,7 +37,7 @@ fn profile(id: &str, name: &str) -> ConnectionProfile {
 #[test]
 fn profiles_and_secrets() {
     // Route secret storage to the in-memory mock store for the whole process.
-    let _ = keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+    keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
 
     let dir = tmp_dir("crud");
 

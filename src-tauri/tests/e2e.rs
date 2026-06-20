@@ -86,7 +86,12 @@ fn unique_key(label: &str) -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    format!("tests/e2e/{}-{}-{}.json.age", label, std::process::id(), nanos)
+    format!(
+        "tests/e2e/{}-{}-{}.json.age",
+        label,
+        std::process::id(),
+        nanos
+    )
 }
 
 async fn put_object(client: &Client, bucket: &str, key: &str, body: Vec<u8>) {
@@ -152,7 +157,10 @@ async fn e2e_upload_list_download_decrypt() {
     .expect("download & decrypt");
 
     let decrypted = std::fs::read(&dest).expect("output file exists");
-    assert_eq!(decrypted, plaintext, "decrypted content must match original");
+    assert_eq!(
+        decrypted, plaintext,
+        "decrypted content must match original"
+    );
     assert_eq!(written, plaintext.len() as u64);
 
     // Cleanup.
@@ -206,15 +214,9 @@ async fn e2e_wrong_key_is_fail_closed() {
 
     // Decrypt with Bob's key — must fail AND leave no output file behind.
     let bob_ids = Arc::new(crypto::parse_identities(&bob.private_key).unwrap());
-    let result = download::download_and_decrypt(
-        &client,
-        &profile.bucket,
-        &key,
-        &dest,
-        bob_ids,
-        |_, _| {},
-    )
-    .await;
+    let result =
+        download::download_and_decrypt(&client, &profile.bucket, &key, &dest, bob_ids, |_, _| {})
+            .await;
 
     assert!(result.is_err(), "wrong key must fail");
     assert!(
