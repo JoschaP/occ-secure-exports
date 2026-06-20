@@ -1,0 +1,81 @@
+// Mirrors the Rust DTOs (serde camelCase).
+
+export interface ConnectionProfile {
+  id: string;
+  name: string;
+  endpoint: string;
+  region: string;
+  bucket: string;
+  accessKeyId: string;
+  pathStyle: boolean;
+  basePrefix: string;
+  rememberSecret: boolean;
+  rememberKey: boolean;
+}
+
+/** Secrets passed alongside a profile; never persisted unless the flags say so. */
+export interface Credentials {
+  secretAccessKey?: string;
+  ageKey?: string;
+}
+
+export interface SecretStatus {
+  hasSecret: boolean;
+  hasKey: boolean;
+}
+
+export interface ConnectResult {
+  bucket: string;
+  basePrefix: string;
+}
+
+export interface KeyPair {
+  publicKey: string;
+  privateKey: string;
+}
+
+export interface ObjectInfo {
+  key: string;
+  size: number;
+  lastModified: string | null;
+}
+
+export interface ProgressEvent {
+  key: string;
+  done: number;
+  total: number;
+}
+
+export interface FileResult {
+  key: string;
+  ok: boolean;
+  error: string | null;
+  path: string | null;
+  bytes: number;
+}
+
+/** A node in the bucket tree (folders are synthesized from key prefixes). */
+export interface TreeNode {
+  id: string;
+  name: string;
+  isFolder: boolean;
+  key?: string;
+  size?: number;
+  lastModified?: string | null;
+  children?: TreeNode[];
+}
+
+export function emptyProfile(id: string): ConnectionProfile {
+  return {
+    id,
+    name: "",
+    endpoint: "",
+    region: "us-east-1",
+    bucket: "",
+    accessKeyId: "",
+    pathStyle: true,
+    basePrefix: "",
+    rememberSecret: true,
+    rememberKey: false,
+  };
+}

@@ -1,0 +1,178 @@
+# OCC Companion
+
+A small, open-source desktop app that lets you pull your **age-encrypted data
+exports** out of your own S3 bucket and decrypt them — with no command line.
+
+It is the recipient-side counterpart to the **OCC** (the cloud console)
+"controlled egress" export feature: the OCC encrypts each artifact with *age*
+for your public key and uploads the ciphertext to a bucket **you** own. Only you
+hold the private key. OCC Companion is the tool that turns those `.age` objects
+back into plaintext, on your machine.
+
+---
+
+## What it does
+
+1. You enter your S3 connection (endpoint, region, bucket, access key, path-style
+   toggle) and your **age private key** — or generate a fresh key pair in-app.
+2. It shows a **single file explorer** of the bucket: a folder tree grouped by key
+   prefix, with names, sizes and dates, and multi-select.
+3. You select one or more objects and click **“Download & decrypt”**, then pick a
+   folder. Each file is streamed, decrypted on the fly, and saved there.
+4. Files are saved **without** the `.age` extension (`export.json.age` →
+   `export.json`).
+
+---
+
+## Security model — your key stays local
+
+This is the whole promise of the product, so it is built to be auditable:
+
+- **The private key never leaves the device.** No telemetry, no analytics, no
+  phone-home. The *only* outbound network connection is to the S3 endpoint you
+  configure.
+- **The WebView cannot reach the network.** A strict Content-Security-Policy
+  (`default-src 'self'`) is set in [`tauri.conf.json`](src-tauri/tauri.conf.json).
+  All S3 traffic happens in the Rust core (`aws-sdk-s3`), never in the browser
+  layer — so key material in the UI physically cannot be exfiltrated by a network
+  request from the frontend.
+- **Secrets live in the OS secure store**, never in plaintext on disk: macOS
+  Keychain, Windows Credential Manager, Linux Secret Service (libsecret), via the
+  [`keyring`](https://crates.io/crates/keyring) crate. Connection *metadata*
+  (endpoint, bucket, access-key **id**) is stored as plain JSON in the app config
+  dir; the secret access key and the private age key are stored only in the
+  secure store, and only if you opt in ("remember"). Otherwise the key is held in
+  memory for the session and discarded.
+- **Streaming decryption.** S3 `GetObject` → `age` decrypt → file writer, in
+  64 KiB chunks. A multi-GB artifact never sits fully in memory.
+- **Fail-closed, atomic writes.** Each file is decrypted to a temp file next to
+  the destination, `fsync`'d, then atomically renamed. On *any* error — wrong
+  key, corrupt object, integrity failure — the temp file is deleted and **no
+  partial or plaintext file is left behind**.
+- **HTTPS by default.** Plain-`http://` endpoints trigger a loud warning.
+
+### Verify it yourself
+
+Because the app is open source, you can confirm the claims:
+
+- Run a network capture (e.g. Wireshark, `mitmproxy`, Little Snitch) while using
+  the app — you will see traffic **only** to your configured S3 endpoint, and the
+  key never on the wire.
+- Read the crypto and I/O paths: [`crypto.rs`](src-tauri/src/crypto.rs),
+  [`download.rs`](src-tauri/src/download.rs), [`s3.rs`](src-tauri/src/s3.rs).
+
+---
+
+## Keys
+
+OCC Companion accepts two kinds of private key as decryption identities:
+
+- **Native age keys** (`AGE-SECRET-KEY-1…`)
+- **OpenSSH private keys** (ed25519 / rsa), unencrypted
+
+Use **“Generate a key pair”** if you don't have one. Copy the **public** key into
+the OCC export configuration; keep the **private** key — it is the only thing that
+can ever decrypt your exports.
+
+---
+
+## How it pairs with the OCC export feature
+
+| OCC (sender) | OCC Companion (recipient) |
+| --- | --- |
+| You register a bucket you own + your age **public** key. | You add the same bucket + your **private** key. |
+| For each export, the OCC encrypts with age for your public key and uploads `…json.age`. | You browse the bucket and download & decrypt. |
+| The OCC never holds your private key. | The private key never leaves your device. |
+
+Object keys typically look like
+`{basePath}/{environment}/{application}/log-export/{date}/<file>.json.age`, but
+the browser handles arbitrary prefixes — backups, snapshots and reports delivered
+to the same bucket work the same way.
+
+---
+
+## Build
+
+### Prerequisites
+
+- [Rust](https://rustup.rs) (stable)
+- Node.js 20+ and [pnpm](https://pnpm.io)
+- Platform toolchain for Tauri 2 — see
+  [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/).
+  On Debian/Ubuntu: `libwebkit2gtk-4.1-dev`, `libssl-dev`,
+  `libayatana-appindicator3-dev`, `librsvg2-dev`, `build-essential`.
+
+### Develop
+
+```bash
+pnpm install
+pnpm tauri dev
+```
+
+### Build a release bundle
+
+```bash
+pnpm tauri build
+```
+
+Artifacts land in `src-tauri/target/release/bundle/` (`.dmg`/`.app`, `.msi`/`.exe`,
+`.deb`/`.AppImage`).
+
+---
+
+## Signing & notarization
+
+Stubs are wired in [`tauri.conf.json`](src-tauri/tauri.conf.json) and the CI
+workflow ([`.github/workflows/release.yml`](.github/workflows/release.yml)).
+Provide these as CI secrets / environment variables to produce signed, notarized
+builds.
+
+### macOS (Apple notarization)
+
+| Variable | Meaning |
+| --- | --- |
+| `APPLE_CERTIFICATE` | base64 of your **Developer ID Application** `.p12` |
+| `APPLE_CERTIFICATE_PASSWORD` | password for that `.p12` |
+| `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: Your Company (TEAMID)` |
+| `APPLE_ID` | Apple ID used for notarization |
+| `APPLE_PASSWORD` | app-specific password for that Apple ID |
+| `APPLE_TEAM_ID` | your Apple Developer Team ID |
+
+### Windows (Authenticode)
+
+| Variable | Meaning |
+| --- | --- |
+| `WINDOWS_CERTIFICATE` | base64 of your code-signing `.pfx` |
+| `WINDOWS_CERTIFICATE_PASSWORD` | password for that `.pfx` |
+
+`digestAlgorithm` / `timestampUrl` are stubbed in `tauri.conf.json` (`sha256` +
+DigiCert). Once a certificate thumbprint is configured, signing runs
+automatically during `tauri build`.
+
+### Linux
+
+No OS signing required for `.deb`/`.AppImage`. Sign the AppImage with `gpg` if you
+distribute a detached signature.
+
+---
+
+## Project layout
+
+```
+src/                     React + Mantine frontend (OCC design system)
+  components/            ProfileList, ConnectionForm, KeygenDialog, Explorer
+  lib/tree.ts            S3 keys → folder tree, formatting
+  api.ts                 typed bridge to the Rust commands
+  theme.ts               OCC Mantine theme (mirrors ../frontend)
+src-tauri/src/
+  crypto.rs              age keygen, identity parsing, streaming decrypt
+  s3.rs                  client build (path-style), paginated listing
+  download.rs            stream → decrypt → temp → atomic rename (fail-closed)
+  profile.rs             profiles (JSON) + secrets (OS secure store)
+  commands.rs            the Tauri command surface
+  error.rs               serializable error type
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

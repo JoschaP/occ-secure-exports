@@ -1,0 +1,47 @@
+[package]
+name = "occ-companion"
+version = "0.1.0"
+description = "Retrieve & decrypt your OCC data exports"
+authors = ["Joscha Prasse <j.prasse@beazubi.de>"]
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "occ_companion_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "sync"] }
+tokio-util = { version = "0.7", features = ["io", "io-util"] }
+futures = "0.3"
+
+# age encryption: native keys + SSH identities, streaming decryption
+age = { version = "0.11", features = ["ssh", "armor"] }
+secrecy = "0.10"
+
+# S3 (MinIO / AWS / IONOS / Ceph) with path-style support
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1"
+aws-credential-types = "1"
+aws-smithy-types = { version = "1", features = ["rt-tokio"] }
+aws-smithy-runtime-api = "1"
+
+# OS secure store: Keychain / Credential Manager / libsecret
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

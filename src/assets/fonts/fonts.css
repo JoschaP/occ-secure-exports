@@ -1,0 +1,13 @@
+@font-face {
+  font-family: "Space Grotesk Bold";
+  src: url("./SpaceGrotesk.ttf");
+  font-style: normal;
+  font-weight: 400 800;
+}
+
+@font-face {
+  font-family: "Anek Latin Regular";
+  src: url("./AnekLatin.ttf");
+  font-style: normal;
+  font-weight: 400 600;
+}
