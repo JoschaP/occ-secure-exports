@@ -174,6 +174,65 @@ pub fn delete_profile(app: AppHandle, id: String) -> AppResult<()> {
     profile::delete_profile(&config_dir(&app)?, &id)
 }
 
+/// The age public key for a saved connection, derived from its stored private
+/// key. `None` if no key is stored or it is not a native age key.
+#[tauri::command]
+pub fn profile_public_key(id: String) -> AppResult<Option<String>> {
+    match profile::get_secret(&id, SecretKind::AgeKey)? {
+        Some(material) => Ok(crypto::public_key_for(&material)),
+        None => Ok(None),
+    }
+}
+
+/// Re-export a Rescue Kit for a saved connection whose key is stored. Writes the
+/// kit to `path` with owner-only permissions. The private key never travels to
+/// the frontend on this path.
+#[tauri::command]
+pub fn export_rescue_kit(id: String, path: String) -> AppResult<()> {
+    let material = profile::get_secret(&id, SecretKind::AgeKey)?
+        .ok_or_else(|| AppError::Key("No private key is stored for this connection.".into()))?;
+    let public = crypto::public_key_for(&material);
+    let kit = rescue_kit_text(public.as_deref(), &material);
+
+    let path = PathBuf::from(path);
+    std::fs::write(&path, kit.as_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
+/// A human-readable recovery document; for age keys it is also a valid age
+/// identity file (every non-key line is a `#` comment).
+fn rescue_kit_text(public: Option<&str>, private: &str) -> String {
+    let pub_line = match public {
+        Some(p) => format!("#     {p}"),
+        None => "#     (SSH key — your public key is your matching SSH public key)".to_string(),
+    };
+    format!(
+        "# ============================================================\n\
+         #   OCC Companion — Key Rescue Kit\n\
+         # ============================================================\n\
+         #   This file is the ONLY way to decrypt your OCC data exports.\n\
+         #   Keep it safe and private. It is never sent anywhere.\n\
+         #\n\
+         #   PUBLIC KEY — give this to the OCC so it can encrypt for you:\n\
+         {pub_line}\n\
+         #\n\
+         #   PRIVATE KEY — your secret (below). If you lose it, your\n\
+         #   exports can NEVER be recovered.\n\
+         #\n\
+         #   To restore: open OCC Companion, add a connection, and paste\n\
+         #   the private key into the \"Private key\" field. Or decrypt with:\n\
+         #     age -d -i occ-companion-rescue-kit.txt export.json.age > export.json\n\
+         # ============================================================\n\
+         \n\
+         {private}\n"
+    )
+}
+
 /// Report whether secrets are present in the secure store for a profile, so the
 /// UI knows whether it must prompt for them.
 #[tauri::command]

@@ -24,6 +24,8 @@ pub fn run() {
             commands::list_profiles,
             commands::save_profile,
             commands::delete_profile,
+            commands::profile_public_key,
+            commands::export_rescue_kit,
             commands::secret_status,
             commands::connect,
             commands::list_objects,

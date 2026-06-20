@@ -14,7 +14,7 @@ import {
   IconCircleCheck,
   IconLoader2,
 } from "@tabler/icons-react";
-import { open, confirm } from "@tauri-apps/plugin-dialog";
+import { open, save, confirm } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -200,6 +200,53 @@ export default function App() {
     reloadProfiles();
   }
 
+  async function copyPublicKey(id: string) {
+    try {
+      const pub = await api.profilePublicKey(id);
+      if (!pub) {
+        notifications.show({
+          color: "yellow",
+          title: "No public key available",
+          message:
+            "This connection has no stored age key (or uses an SSH key). Enable “remember key” to derive it.",
+          autoClose: 5000,
+        });
+        return;
+      }
+      await navigator.clipboard.writeText(pub);
+      notifications.show({
+        color: "green",
+        icon: <IconCircleCheck size={18} />,
+        title: "Public key copied",
+        message: "Paste it into the OCC.",
+        autoClose: 2500,
+      });
+    } catch (e) {
+      fail("Could not copy the public key", e);
+    }
+  }
+
+  async function exportKit(id: string) {
+    const path = await save({
+      title: "Export Rescue Kit",
+      defaultPath: "occ-companion-rescue-kit.txt",
+      filters: [{ name: "Rescue Kit", extensions: ["txt", "age", "key"] }],
+    });
+    if (!path) return;
+    try {
+      await api.exportRescueKit(id, path);
+      notifications.show({
+        color: "green",
+        icon: <IconCircleCheck size={18} />,
+        title: "Rescue Kit exported",
+        message: "Keep this file somewhere safe.",
+        autoClose: 3000,
+      });
+    } catch (e) {
+      fail("Could not export the Rescue Kit", e);
+    }
+  }
+
   async function deleteProfile(id: string) {
     const ok = await confirm("Delete this connection and its stored secrets?", {
       title: "Delete connection",
@@ -276,6 +323,8 @@ export default function App() {
                 setInjectedKey(null);
                 setView("form");
               }}
+              onCopyPublicKey={copyPublicKey}
+              onExportKit={exportKit}
               onDelete={deleteProfile}
               onNew={() => {
                 setEditing(null);

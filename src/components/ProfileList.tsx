@@ -11,6 +11,8 @@ import {
 } from "@mantine/core";
 import {
   IconChevronRight,
+  IconCopy,
+  IconDeviceFloppy,
   IconDotsVertical,
   IconKey,
   IconPencil,
@@ -26,6 +28,8 @@ interface Props {
   connectingId: string | null;
   onConnect: (p: ConnectionProfile) => void;
   onEdit: (p: ConnectionProfile) => void;
+  onCopyPublicKey: (id: string) => void;
+  onExportKit: (id: string) => void;
   onDelete: (id: string) => void;
   onNew: () => void;
   onGenerateKey: () => void;
@@ -36,6 +40,8 @@ export function ProfileList({
   connectingId,
   onConnect,
   onEdit,
+  onCopyPublicKey,
+  onExportKit,
   onDelete,
   onNew,
   onGenerateKey,
@@ -119,6 +125,19 @@ export function ProfileList({
                     >
                       Edit
                     </Menu.Item>
+                    <Menu.Item
+                      leftSection={<IconCopy size={16} />}
+                      onClick={() => onCopyPublicKey(p.id)}
+                    >
+                      Copy public key
+                    </Menu.Item>
+                    <Menu.Item
+                      leftSection={<IconDeviceFloppy size={16} />}
+                      onClick={() => onExportKit(p.id)}
+                    >
+                      Export Rescue Kit
+                    </Menu.Item>
+                    <Menu.Divider />
                     <Menu.Item
                       color="red"
                       leftSection={<IconTrash size={16} />}

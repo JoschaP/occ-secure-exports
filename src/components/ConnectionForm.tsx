@@ -53,10 +53,16 @@ export function ConnectionForm({
 
   useEffect(() => {
     if (initial) {
-      api.secretStatus(initial.id).then((s) => {
-        setHasSavedSecret(s.hasSecret);
-        setHasSavedKey(s.hasKey);
-      });
+      api
+        .secretStatus(initial.id)
+        .then((s) => {
+          setHasSavedSecret(s.hasSecret);
+          setHasSavedKey(s.hasKey);
+        })
+        .catch(() => {
+          setHasSavedSecret(false);
+          setHasSavedKey(false);
+        });
     }
   }, [initial]);
 
@@ -77,8 +83,12 @@ export function ConnectionForm({
     if (!profile.endpoint.trim()) return "The endpoint URL is required.";
     if (!profile.bucket.trim()) return "The bucket name is required.";
     if (!profile.accessKeyId.trim()) return "The access key ID is required.";
-    if (!secret && !hasSavedSecret) return "The secret access key is required.";
-    if (!ageKey && !hasSavedKey) return "A private key is required to decrypt.";
+    // A stored secret only counts if it will still be there after saving — i.e.
+    // the matching "remember" toggle is still on. Turning it off deletes it.
+    if (!secret && !(hasSavedSecret && profile.rememberSecret))
+      return "The secret access key is required.";
+    if (!ageKey && !(hasSavedKey && profile.rememberKey))
+      return "A private key is required to decrypt.";
     return null;
   }
 

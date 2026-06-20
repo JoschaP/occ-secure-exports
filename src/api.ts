@@ -26,6 +26,12 @@ export const api = {
 
   deleteProfile: (id: string) => invoke<void>("delete_profile", { id }),
 
+  profilePublicKey: (id: string) =>
+    invoke<string | null>("profile_public_key", { id }),
+
+  exportRescueKit: (id: string, path: string) =>
+    invoke<void>("export_rescue_kit", { id, path }),
+
   secretStatus: (id: string) => invoke<SecretStatus>("secret_status", { id }),
 
   connect: (profile: ConnectionProfile, creds: Credentials) =>

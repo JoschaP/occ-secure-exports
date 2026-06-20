@@ -80,6 +80,20 @@ pub fn parse_identities(material: &str) -> AppResult<Vec<Identity>> {
     Ok(identities)
 }
 
+/// Derive the age public key (recipient) for stored private key material, if it
+/// is a native age key. Returns `None` for SSH keys or unparseable input.
+pub fn public_key_for(material: &str) -> Option<String> {
+    for line in material.trim().lines() {
+        let line = line.trim();
+        if line.starts_with("AGE-SECRET-KEY-") {
+            if let Ok(id) = line.parse::<age::x25519::Identity>() {
+                return Some(id.to_public().to_string());
+            }
+        }
+    }
+    None
+}
+
 /// Stream-decrypt `src` into `dst`, invoking `on_progress` with the running
 /// count of plaintext bytes written. Returns the total bytes written.
 pub fn decrypt_stream<R, W>(
