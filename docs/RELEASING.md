@@ -17,22 +17,21 @@ Version bumps follow the commit types: `fix:` → patch, `feat:` → minor,
 `feat!:` / `BREAKING CHANGE:` → major. While the project is `0.x`, breaking
 changes stay below `1.0` until a `1.0.0` is cut intentionally.
 
-## One-time setup: the `PACKAGES_TOKEN` secret
+## Tap/bucket write access (already configured)
 
-Updating the **separate** tap/bucket repos needs a token the default
-`GITHUB_TOKEN` doesn't have. Without it, the package-manager step logs a warning
+Pushing to the **separate** tap/bucket repos uses write-enabled **SSH deploy
+keys**, stored as the secrets `HOMEBREW_TAP_DEPLOY_KEY` and
+`SCOOP_BUCKET_DEPLOY_KEY`. Without them the package-manager step logs a warning
 and skips (the release itself still succeeds).
 
-1. Create a **fine-grained Personal Access Token**
-   (GitHub → Settings → Developer settings → Fine-grained tokens):
-   - **Repository access:** only `JoschaP/homebrew-tap` and `JoschaP/scoop-bucket`
-   - **Permissions:** Contents → **Read and write**
-2. Add it to this repo as a secret named **`PACKAGES_TOKEN`**
-   (Settings → Secrets and variables → Actions → New repository secret), or:
+To rotate them (all via CLI — no PAT needed):
 
-   ```bash
-   gh secret set PACKAGES_TOKEN --repo JoschaP/occ-companion
-   ```
+```bash
+ssh-keygen -t ed25519 -f tapkey -N "" -C occ-companion-ci
+gh repo deploy-key add tapkey.pub --repo JoschaP/homebrew-tap --allow-write --title occ-companion-ci
+gh secret set HOMEBREW_TAP_DEPLOY_KEY --repo JoschaP/occ-companion < tapkey
+# repeat for scoop-bucket → SCOOP_BUCKET_DEPLOY_KEY
+```
 
 ## Publishing bundles for an existing tag (manual)
 
