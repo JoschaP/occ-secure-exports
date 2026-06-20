@@ -97,9 +97,13 @@ to the same bucket work the same way.
 
 - [Rust](https://rustup.rs) (stable)
 - Node.js 20+ and [pnpm](https://pnpm.io)
+- **CMake** and **NASM** — the AWS SDK's crypto backend (`aws-lc-rs`) compiles
+  native assembly. CMake ships on most systems; install NASM via your package
+  manager (`brew install nasm`, `apt install nasm`, or `choco install nasm` /
+  the [setup-nasm](https://github.com/ilammy/setup-nasm) action on Windows).
 - Platform toolchain for Tauri 2 — see
   [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/).
-  On Debian/Ubuntu: `libwebkit2gtk-4.1-dev`, `libssl-dev`,
+  On Debian/Ubuntu: `libwebkit2gtk-4.1-dev`,
   `libayatana-appindicator3-dev`, `librsvg2-dev`, `build-essential`.
 
 ### Develop
@@ -117,6 +121,22 @@ pnpm tauri build
 
 Artifacts land in `src-tauri/target/release/bundle/` (`.dmg`/`.app`, `.msi`/`.exe`,
 `.deb`/`.AppImage`).
+
+### Platform support
+
+Built natively for each OS (one CI runner per platform — no cross-compilation).
+All crypto and S3 I/O is pure-Rust (rustls — no system OpenSSL).
+
+| | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| Bundle | `.dmg` / `.app` (arm64 + x86_64) | `.msi` / `.exe` (NSIS) | `.deb` / `.AppImage` |
+| WebView (runtime) | WKWebView — built in | WebView2 — present on Win 11; the installer bootstraps it otherwise | WebKitGTK (`libwebkit2gtk-4.1`) — pulled in by the `.deb` |
+| Secure store | Keychain | Credential Manager | Secret Service (libsecret / gnome-keyring / KWallet) |
+| Secret files (key, Rescue Kit) | `0600` | user-profile ACLs | `0600` |
+
+On Linux without a Secret Service running, **"remember"** is unavailable but the
+app still works with **"ask each time"**. Object keys are sanitized so a `/` or
+`\` in a key can never escape the chosen download folder on any OS.
 
 ---
 

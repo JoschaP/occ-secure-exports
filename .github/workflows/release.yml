@@ -18,9 +18,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest # Apple Silicon
+          - platform: macos-latest  # Apple Silicon
             args: "--target aarch64-apple-darwin"
-          - platform: macos-latest # Intel
+          - platform: macos-latest  # Intel
             args: "--target x86_64-apple-darwin"
           - platform: ubuntu-22.04
             args: ""
@@ -40,8 +40,19 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libssl-dev \
-            build-essential
+            build-essential \
+            cmake \
+            nasm
+
+      # aws-lc-rs (the AWS SDK's default crypto backend) needs NASM to build its
+      # x86_64 assembly. CMake is preinstalled on all GitHub runners.
+      - name: Install NASM (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: ilammy/setup-nasm@v1
+
+      - name: Install NASM (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: brew install nasm
 
       - uses: pnpm/action-setup@v4
         with:
