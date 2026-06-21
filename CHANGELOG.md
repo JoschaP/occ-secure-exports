@@ -1,3 +1,15 @@
+# [0.4.0](https://github.com/JoschaP/occ-companion/compare/v0.3.0...v0.4.0) (2026-06-21)
+
+
+### Bug Fixes
+
+* bundle a profile's secrets into one keychain entry (single prompt) ([0c4c621](https://github.com/JoschaP/occ-companion/commit/0c4c6217c7642933c19d07ae0349108f199dd2f6))
+
+
+### Features
+
+* status bar reflects the current selection size ([1aee9f1](https://github.com/JoschaP/occ-companion/commit/1aee9f1e04e1017b6d7d1177926f5f899ac3d9a7))
+
 # [0.3.0](https://github.com/JoschaP/occ-companion/compare/v0.2.1...v0.3.0) (2026-06-21)
 
 
