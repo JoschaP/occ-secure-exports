@@ -247,7 +247,10 @@ async fn e2e_passthrough_non_age_file_unchanged() {
     let dir = std::env::temp_dir().join(format!("occ-e2e-pt-{}-{}", std::process::id(), nanos));
     std::fs::create_dir_all(&dir).unwrap();
     let out_name = plaintext_file_name(&key);
-    assert!(out_name.ends_with(".txt"), "extension must be kept for non-age");
+    assert!(
+        out_name.ends_with(".txt"),
+        "extension must be kept for non-age"
+    );
     let dest = dir.join(&out_name);
 
     let identities = Arc::new(crypto::parse_identities(&kp.private_key).unwrap());
