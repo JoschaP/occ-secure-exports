@@ -117,7 +117,11 @@ export default function App() {
 
   // Download progress / completion events (registered once).
   useEffect(() => {
+    let cancelled = false;
     const uns: UnlistenFn[] = [];
+    // If cleanup fires before a listener resolves, unlisten immediately so we
+    // never leak a listener registered after unmount.
+    const track = (u: UnlistenFn) => (cancelled ? u() : uns.push(u));
     onProgress((e) =>
       setDl((d) =>
         d.items[e.key]
@@ -130,7 +134,7 @@ export default function App() {
             }
           : d,
       ),
-    ).then((u) => uns.push(u));
+    ).then(track);
     onFileDone((e) =>
       setDl((d) => {
         const it = d.items[e.key];
@@ -149,8 +153,11 @@ export default function App() {
           },
         };
       }),
-    ).then((u) => uns.push(u));
-    return () => uns.forEach((u) => u());
+    ).then(track);
+    return () => {
+      cancelled = true;
+      uns.forEach((u) => u());
+    };
   }, []);
 
   // Fit the connection screens (list/form) to their content so the window
@@ -346,7 +353,7 @@ export default function App() {
   }
 
   async function handleDownload(plan: DownloadPlanItem[]) {
-    if (!plan.length) return;
+    if (!plan.length || downloading) return; // guard against racing batches
     const dir = await open({
       directory: true,
       multiple: false,
@@ -376,13 +383,19 @@ export default function App() {
   async function retryItem(key: string) {
     const it = dl.items[key];
     if (!it) return;
-    setDl((d) => ({
-      ...d,
-      items: {
-        ...d.items,
-        [key]: { ...it, status: "running", done: 0, error: undefined },
-      },
-    }));
+    // Read the current entry inside the updater so a concurrently-finishing
+    // download can't be clobbered by a stale snapshot.
+    setDl((d) => {
+      const cur = d.items[key];
+      if (!cur) return d;
+      return {
+        ...d,
+        items: {
+          ...d.items,
+          [key]: { ...cur, status: "running", done: 0, error: undefined },
+        },
+      };
+    });
     try {
       await api.downloadDecrypt(
         [{ key: it.key, relPath: it.relPath }],
@@ -440,6 +453,7 @@ export default function App() {
               objects={objects}
               version={version}
               refreshing={refreshing}
+              downloadBusy={downloading}
               onRefresh={refresh}
               onDisconnect={disconnect}
               onDownload={handleDownload}

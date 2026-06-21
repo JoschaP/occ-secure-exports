@@ -46,6 +46,8 @@ interface Props {
   objects: ObjectInfo[];
   version: string;
   refreshing: boolean;
+  /** A download is in flight — disables the button to avoid racing batches. */
+  downloadBusy: boolean;
   onRefresh: () => void;
   onDisconnect: () => void;
   onDownload: (items: DownloadPlanItem[]) => void;
@@ -92,6 +94,7 @@ export function Explorer({
   objects,
   version,
   refreshing,
+  downloadBusy,
   onRefresh,
   onDisconnect,
   onDownload,
@@ -275,7 +278,8 @@ export function Explorer({
         )}
         <Button
           leftSection={<IconDownload size={18} />}
-          disabled={plan.length === 0}
+          disabled={plan.length === 0 || downloadBusy}
+          loading={downloadBusy}
           onClick={() => onDownload(plan)}
         >
           {downloadLabel}
