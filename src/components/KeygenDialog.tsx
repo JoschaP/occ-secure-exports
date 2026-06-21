@@ -22,6 +22,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { notifications } from "@mantine/notifications";
 
 import { api } from "../api";
+import { errText } from "../lib/errors";
 import type { KeyPair } from "../types";
 
 interface Props {
@@ -80,7 +81,7 @@ export function KeygenDialog({ opened, onClose, onUseKey }: Props) {
         color: "red",
         icon: <IconAlertTriangle size={18} />,
         title: "Could not generate a key pair",
-        message: String(e),
+        message: errText(e),
         autoClose: 5000,
       });
     } finally {
@@ -116,7 +117,7 @@ export function KeygenDialog({ opened, onClose, onUseKey }: Props) {
       "#   be recovered.",
       "#",
       "#   To restore: open OCC Secure Exports, add a connection, and paste",
-      "#   the private key into the \"Private key\" field. Or decrypt a",
+      '#   the private key into the "Private key" field. Or decrypt a',
       "#   file manually with the age tool:",
       "#     age -d -i occ-secure-exports-rescue-kit.txt export.json.age > export.json",
       "# ============================================================",
@@ -149,7 +150,7 @@ export function KeygenDialog({ opened, onClose, onUseKey }: Props) {
         color: "red",
         icon: <IconAlertTriangle size={18} />,
         title: "Could not save the Rescue Kit",
-        message: String(e),
+        message: errText(e),
         autoClose: 5000,
       });
     }
@@ -186,12 +187,24 @@ export function KeygenDialog({ opened, onClose, onUseKey }: Props) {
           </Button>
         ) : (
           <>
-            <KeyBlock label="PUBLIC KEY — paste this into the OCC" value={pair.publicKey} />
-            <KeyBlock label="PRIVATE KEY — keep this secret" value={pair.privateKey} />
+            <KeyBlock
+              label="PUBLIC KEY — paste this into the OCC"
+              value={pair.publicKey}
+            />
+            <KeyBlock
+              label="PRIVATE KEY — keep this secret"
+              value={pair.privateKey}
+            />
 
             <Alert
               color={saved ? "green" : "yellow"}
-              icon={saved ? <IconCheck size={18} /> : <IconAlertTriangle size={18} />}
+              icon={
+                saved ? (
+                  <IconCheck size={18} />
+                ) : (
+                  <IconAlertTriangle size={18} />
+                )
+              }
               variant="light"
             >
               {saved
@@ -204,7 +217,11 @@ export function KeygenDialog({ opened, onClose, onUseKey }: Props) {
                 variant={saved ? "light" : "filled"}
                 color={saved ? "green" : undefined}
                 leftSection={
-                  saved ? <IconCheck size={18} /> : <IconDeviceFloppy size={18} />
+                  saved ? (
+                    <IconCheck size={18} />
+                  ) : (
+                    <IconDeviceFloppy size={18} />
+                  )
                 }
                 onClick={saveRescueKit}
               >

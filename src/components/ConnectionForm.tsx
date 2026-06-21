@@ -23,7 +23,12 @@ import {
 } from "@tabler/icons-react";
 
 import { api } from "../api";
-import { emptyProfile, type ConnectionProfile, type Credentials } from "../types";
+import { errText } from "../lib/errors";
+import {
+  emptyProfile,
+  type ConnectionProfile,
+  type Credentials,
+} from "../types";
 
 interface Props {
   initial: ConnectionProfile | null;
@@ -73,8 +78,10 @@ export function ConnectionForm({
     }
   }, [injectedKey]);
 
-  const set = <K extends keyof ConnectionProfile>(key: K, value: ConnectionProfile[K]) =>
-    setProfile((p) => ({ ...p, [key]: value }));
+  const set = <K extends keyof ConnectionProfile>(
+    key: K,
+    value: ConnectionProfile[K],
+  ) => setProfile((p) => ({ ...p, [key]: value }));
 
   const insecure = profile.endpoint.trim().toLowerCase().startsWith("http://");
 
@@ -113,7 +120,7 @@ export function ConnectionForm({
       await api.saveProfile(profile, creds);
       onConnect(profile, creds);
     } catch (e) {
-      setError(String(e));
+      setError(errText(e));
     } finally {
       setBusy(false);
     }
@@ -131,7 +138,7 @@ export function ConnectionForm({
       await api.saveProfile(profile, buildCreds());
       onCancel();
     } catch (e) {
-      setError(String(e));
+      setError(errText(e));
     } finally {
       setBusy(false);
     }
@@ -143,12 +150,18 @@ export function ConnectionForm({
         <ActionIcon variant="subtle" color="gray" onClick={onCancel} size="lg">
           <IconArrowLeft size={20} />
         </ActionIcon>
-        <Title order={2}>{initial ? "Edit connection" : "New connection"}</Title>
+        <Title order={2}>
+          {initial ? "Edit connection" : "New connection"}
+        </Title>
       </Group>
 
       <Stack>
         {error && (
-          <Alert color="red" icon={<IconAlertTriangle size={18} />} variant="light">
+          <Alert
+            color="red"
+            icon={<IconAlertTriangle size={18} />}
+            variant="light"
+          >
             {error}
           </Alert>
         )}
@@ -169,7 +182,12 @@ export function ConnectionForm({
           onChange={(e) => set("endpoint", e.currentTarget.value)}
         />
         {insecure && (
-          <Alert color="orange" icon={<IconAlertTriangle size={18} />} variant="light" p="xs">
+          <Alert
+            color="orange"
+            icon={<IconAlertTriangle size={18} />}
+            variant="light"
+            p="xs"
+          >
             This endpoint uses plain <b>http://</b>. Your credentials and data
             would travel unencrypted. Use <b>https://</b> unless this is a local
             test server.
@@ -199,7 +217,9 @@ export function ConnectionForm({
 
         <PasswordInput
           label="Secret access key"
-          placeholder={hasSavedSecret ? "•••••••• (saved — leave blank to keep)" : ""}
+          placeholder={
+            hasSavedSecret ? "•••••••• (saved — leave blank to keep)" : ""
+          }
           value={secret}
           onChange={(e) => setSecret(e.currentTarget.value)}
         />
@@ -246,7 +266,9 @@ export function ConnectionForm({
             maxRows={6}
             value={ageKey}
             onChange={(e) => setAgeKey(e.currentTarget.value)}
-            styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
+            styles={{
+              input: { fontFamily: "var(--mantine-font-family-monospace)" },
+            }}
           />
         </div>
 

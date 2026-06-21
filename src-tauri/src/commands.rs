@@ -117,16 +117,16 @@ async fn resolve_credentials(
 
     let secret = match &creds.secret_access_key {
         Some(s) if !s.is_empty() => s.clone(),
-        _ => stored
-            .s3_secret
-            .ok_or_else(|| AppError::Config("No secret access key available.".into()))?,
+        _ => stored.s3_secret.ok_or_else(|| {
+            AppError::MissingCredentials("No secret access key available.".into())
+        })?,
     };
 
     let key_material = match &creds.age_key {
         Some(k) if !k.is_empty() => k.clone(),
         _ => stored
             .age_key
-            .ok_or_else(|| AppError::Key("No private key available.".into()))?,
+            .ok_or_else(|| AppError::MissingCredentials("No private key available.".into()))?,
     };
 
     let identities = crypto::parse_identities(&key_material)?;

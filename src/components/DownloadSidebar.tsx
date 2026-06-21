@@ -19,20 +19,9 @@ import {
 } from "@tabler/icons-react";
 
 import { formatBytes } from "../lib/tree";
+import type { DlItem } from "../lib/dlqueue";
 
-export interface DlItem {
-  key: string;
-  /** Relative destination path — used as the display name and for retry. */
-  relPath: string;
-  /** Destination folder chosen for this download (retry + reveal context). */
-  destDir: string;
-  done: number;
-  total: number;
-  status: "running" | "ok" | "error";
-  error?: string;
-  /** Final saved path, once done — used by "show in folder". */
-  path?: string;
-}
+export type { DlItem };
 
 interface Props {
   items: DlItem[];

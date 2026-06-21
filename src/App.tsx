@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconCircleCheck } from "@tabler/icons-react";
 import { open, save, confirm } from "@tauri-apps/plugin-dialog";
@@ -15,20 +21,29 @@ import type {
   UpdateInfo,
 } from "./types";
 import { type DownloadPlanItem } from "./lib/tree";
+import {
+  type DlMap,
+  addItems,
+  applyFileDone,
+  applyProgress,
+  clearFinished as clearFinishedItems,
+  markRetrying,
+} from "./lib/dlqueue";
+import { errCode, errText } from "./lib/errors";
 import { useIdleDisconnect } from "./hooks/useIdleDisconnect";
 import { ProfileList } from "./components/ProfileList";
 import { ConnectionForm } from "./components/ConnectionForm";
 import { Explorer } from "./components/Explorer";
 import { KeygenDialog } from "./components/KeygenDialog";
 import { UpdateDialog } from "./components/UpdateDialog";
-import { DownloadSidebar, type DlItem } from "./components/DownloadSidebar";
+import { DownloadSidebar } from "./components/DownloadSidebar";
 import { Footer } from "./components/Footer";
 
 type View = "list" | "form" | "explorer";
 
 interface DlState {
   open: boolean;
-  items: Record<string, DlItem>;
+  items: DlMap;
 }
 
 // Width of the connection screens; their height is fit to content (see the
@@ -88,7 +103,10 @@ export default function App() {
   // Dev-only: auto-seed a demo connection (from .env.development.local) so
   // local testing needs no manual entry. Never runs in production builds.
   useEffect(() => {
-    const env = import.meta.env as unknown as Record<string, string | undefined> & {
+    const env = import.meta.env as unknown as Record<
+      string,
+      string | undefined
+    > & {
       DEV: boolean;
     };
     if (!env.DEV || !env.VITE_DEV_ENDPOINT) return;
@@ -123,36 +141,10 @@ export default function App() {
     // never leak a listener registered after unmount.
     const track = (u: UnlistenFn) => (cancelled ? u() : uns.push(u));
     onProgress((e) =>
-      setDl((d) =>
-        d.items[e.key]
-          ? {
-              ...d,
-              items: {
-                ...d.items,
-                [e.key]: { ...d.items[e.key], done: e.done, total: e.total },
-              },
-            }
-          : d,
-      ),
+      setDl((d) => ({ ...d, items: applyProgress(d.items, e) })),
     ).then(track);
     onFileDone((e) =>
-      setDl((d) => {
-        const it = d.items[e.key];
-        if (!it) return d;
-        return {
-          ...d,
-          items: {
-            ...d.items,
-            [e.key]: {
-              ...it,
-              status: e.ok ? "ok" : "error",
-              error: e.error ?? undefined,
-              path: e.path ?? it.path,
-              done: e.ok ? it.total || it.done : it.done,
-            },
-          },
-        };
-      }),
+      setDl((d) => ({ ...d, items: applyFileDone(d.items, e) })),
     ).then(track);
     return () => {
       cancelled = true;
@@ -183,7 +175,10 @@ export default function App() {
         try {
           const sf = await win.scaleFactor();
           const outer = await win.outerSize();
-          chrome = Math.max(0, Math.round(outer.height / sf - window.innerHeight));
+          chrome = Math.max(
+            0,
+            Math.round(outer.height / sf - window.innerHeight),
+          );
         } catch {
           /* getters unavailable (e.g. tests) */
         }
@@ -203,7 +198,6 @@ export default function App() {
       ro.disconnect();
       cancelAnimationFrame(frame);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, sidebarOpen]);
 
   // Explorer window size; widens when the download sidebar is open.
@@ -220,7 +214,7 @@ export default function App() {
       color: "red",
       icon: <IconAlertTriangle size={18} />,
       title,
-      message: String(e),
+      message: errText(e),
       autoClose: 6000,
     });
   }
@@ -255,7 +249,7 @@ export default function App() {
       setView("explorer");
       reloadProfiles();
     } catch (e) {
-      if (/No (secret access key|private key) available/i.test(String(e))) {
+      if (errCode(e) === "missing_credentials") {
         setEditing(p);
         setInjectedKey(null);
         setView("form");
@@ -360,19 +354,8 @@ export default function App() {
       title: "Choose a folder to save into",
     });
     if (!dir || Array.isArray(dir)) return;
-    const added: Record<string, DlItem> = {};
-    for (const p of plan) {
-      added[p.key] = {
-        key: p.key,
-        relPath: p.relPath,
-        destDir: dir,
-        done: 0,
-        total: 0,
-        status: "running",
-      };
-    }
     // Accumulate into the queue instead of replacing it.
-    setDl((d) => ({ open: true, items: { ...d.items, ...added } }));
+    setDl((d) => ({ open: true, items: addItems(d.items, plan, dir) }));
     try {
       await api.downloadDecrypt(plan, dir);
     } catch (e) {
@@ -383,19 +366,9 @@ export default function App() {
   async function retryItem(key: string) {
     const it = dl.items[key];
     if (!it) return;
-    // Read the current entry inside the updater so a concurrently-finishing
-    // download can't be clobbered by a stale snapshot.
-    setDl((d) => {
-      const cur = d.items[key];
-      if (!cur) return d;
-      return {
-        ...d,
-        items: {
-          ...d.items,
-          [key]: { ...cur, status: "running", done: 0, error: undefined },
-        },
-      };
-    });
+    // Reset inside the updater so a concurrently-finishing download can't be
+    // clobbered by a stale snapshot.
+    setDl((d) => ({ ...d, items: markRetrying(d.items, key) }));
     try {
       await api.downloadDecrypt(
         [{ key: it.key, relPath: it.relPath }],
@@ -416,14 +389,10 @@ export default function App() {
 
   function clearFinished() {
     setDl((d) => {
-      const items: Record<string, DlItem> = {};
-      for (const [k, v] of Object.entries(d.items)) {
-        if (v.status === "running") items[k] = v;
-      }
+      const items = clearFinishedItems(d.items);
       return { open: Object.keys(items).length > 0, items };
     });
   }
-
 
   // Drop the session (and the in-memory key) after inactivity. A running
   // download keeps it alive so a long transfer is never interrupted.
