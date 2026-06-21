@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Group,
   Modal,
   Progress,
-  ScrollArea,
   Stack,
   Text,
   ThemeIcon,
@@ -45,15 +44,16 @@ interface DlState {
   items: Record<string, DlItem>;
 }
 
-// Compact for the connection screen, roomier once a bucket is open.
-async function resizeWindow(mode: "compact" | "explorer") {
+// Width of the connection screens; their height is fit to content (see the
+// content-fit effect). The explorer wants more room for the bucket tree.
+const START_WIDTH = 760;
+const START_MIN_INNER_H = 515; // content+footer floor (matches tauri minHeight)
+const FOOTER_H = 35; // fixed footer height (keep in sync with .footer)
+
+async function sizeExplorerWindow() {
   try {
-    const size =
-      mode === "explorer"
-        ? new LogicalSize(1080, 720)
-        : new LogicalSize(760, 620);
     const w = getCurrentWindow();
-    await w.setSize(size);
+    await w.setSize(new LogicalSize(1080, 720));
     await w.center();
   } catch {
     /* window API unavailable (e.g. tests) — ignore */
@@ -161,6 +161,50 @@ export default function App() {
     return () => uns.forEach((u) => u());
   }, []);
 
+  // Fit the connection screens (list/form) to their content so the window
+  // isn't oversized; the explorer stays fixed. We measure the *inner* content
+  // (natural height) and add the fixed footer — the footer never scales and
+  // stays pinned at the bottom. Clamped to a minimum and the screen height.
+  const contentRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (view === "explorer") return;
+    const el = contentRef.current;
+    if (!el) return;
+    let frame = 0;
+    const fit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(async () => {
+        const content = el.offsetHeight;
+        if (content < 40) return; // not laid out yet
+        const win = getCurrentWindow();
+        // setSize targets the OUTER window, so add the chrome (title bar)
+        // height — the difference between the outer window and the WebView —
+        // or the content gets clipped and the area scrolls.
+        let chrome = 0;
+        try {
+          const sf = await win.scaleFactor();
+          const outer = await win.outerSize();
+          chrome = Math.max(0, Math.round(outer.height / sf - window.innerHeight));
+        } catch {
+          /* getters unavailable (e.g. tests) */
+        }
+        const cap = Math.round((window.screen.availHeight || 900) * 0.94);
+        // Floor is measured as content + footer (the WebView area); chrome is
+        // added on top because setSize targets the outer window.
+        const inner = Math.max(content + FOOTER_H, START_MIN_INNER_H);
+        const h = Math.min(inner + chrome + 2, cap); // +2 guards sub-pixel
+        win.setSize(new LogicalSize(START_WIDTH, h)).catch(() => {});
+      });
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [view]);
+
   function fail(title: string, e: unknown) {
     notifications.show({
       color: "red",
@@ -179,7 +223,7 @@ export default function App() {
       setSession(res);
       setObjects(objs);
       setView("explorer");
-      void resizeWindow("explorer");
+      void sizeExplorerWindow();
       reloadProfiles();
     } catch (e) {
       fail("Could not connect", e);
@@ -200,7 +244,7 @@ export default function App() {
       setSession(res);
       setObjects(objs);
       setView("explorer");
-      void resizeWindow("explorer");
+      void sizeExplorerWindow();
       reloadProfiles();
     } catch (e) {
       if (/No (secret access key|private key) available/i.test(String(e))) {
@@ -236,7 +280,6 @@ export default function App() {
     setSession(null);
     setObjects([]);
     setView("list");
-    void resizeWindow("compact");
     reloadProfiles();
   }
 
@@ -358,45 +401,47 @@ export default function App() {
           onDownload={handleDownload}
         />
       ) : (
-        <>
-          <ScrollArea style={{ flex: 1 }}>
-          {view === "form" ? (
-            <ConnectionForm
-              initial={editing}
-              injectedKey={injectedKey}
-              onCancel={() => {
-                setView("list");
-                setEditing(null);
-                setInjectedKey(null);
-                reloadProfiles();
-              }}
-              onConnect={doConnect}
-              onGenerateKey={() => setKeygenOpen(true)}
-            />
-          ) : (
-            <ProfileList
-              profiles={profiles}
-              connectingId={connectingId}
-              onConnect={connectFromList}
-              onEdit={(p) => {
-                setEditing(p);
-                setInjectedKey(null);
-                setView("form");
-              }}
-              onCopyPublicKey={copyPublicKey}
-              onExportKit={exportKit}
-              onDelete={deleteProfile}
-              onNew={() => {
-                setEditing(null);
-                setInjectedKey(null);
-                setView("form");
-              }}
-              onGenerateKey={() => setKeygenOpen(true)}
-            />
-          )}
-          </ScrollArea>
+        <div className="start-shell">
+          <div className="start-scroll">
+            <div ref={contentRef}>
+              {view === "form" ? (
+                <ConnectionForm
+                  initial={editing}
+                  injectedKey={injectedKey}
+                  onCancel={() => {
+                    setView("list");
+                    setEditing(null);
+                    setInjectedKey(null);
+                    reloadProfiles();
+                  }}
+                  onConnect={doConnect}
+                  onGenerateKey={() => setKeygenOpen(true)}
+                />
+              ) : (
+                <ProfileList
+                  profiles={profiles}
+                  connectingId={connectingId}
+                  onConnect={connectFromList}
+                  onEdit={(p) => {
+                    setEditing(p);
+                    setInjectedKey(null);
+                    setView("form");
+                  }}
+                  onCopyPublicKey={copyPublicKey}
+                  onExportKit={exportKit}
+                  onDelete={deleteProfile}
+                  onNew={() => {
+                    setEditing(null);
+                    setInjectedKey(null);
+                    setView("form");
+                  }}
+                  onGenerateKey={() => setKeygenOpen(true)}
+                />
+              )}
+            </div>
+          </div>
           <Footer version={version} />
-        </>
+        </div>
       )}
 
       <KeygenDialog

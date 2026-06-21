@@ -14,6 +14,22 @@ body,
   overflow: hidden;
 }
 
+/* ---- connection screens: window is sized to fit the content ----
+   The shell fills the window; the content area scales (and scrolls if it ever
+   exceeds the screen cap), while the footer keeps its height and stays pinned
+   to the bottom. */
+.start-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.start-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* ---- explorer layout: fills the window as toolbar / tree / status ---- */
 .explorer {
   flex: 1;
