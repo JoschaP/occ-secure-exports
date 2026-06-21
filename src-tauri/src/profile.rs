@@ -14,22 +14,40 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, AppResult};
 
-/// Keyring service name. Accounts are derived per profile + secret kind.
+/// Keyring service name. One entry per profile holds all of its secrets.
 const KEYRING_SERVICE: &str = "de.occ-companion.app";
 const PROFILES_FILE: &str = "profiles.json";
 
-/// Which secret a keyring entry holds.
+/// Both secrets for a connection, stored together in a single keyring entry so
+/// the OS prompts for keychain access at most once per connect. Either field
+/// may be absent (the user chose not to remember it).
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredSecrets {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub s3_secret: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub age_key: Option<String>,
+}
+
+impl StoredSecrets {
+    pub fn is_empty(&self) -> bool {
+        self.s3_secret.is_none() && self.age_key.is_none()
+    }
+}
+
+/// Legacy per-kind accounts (pre-bundling). Read once to migrate forward.
 #[derive(Clone, Copy)]
-pub enum SecretKind {
+enum LegacyKind {
     S3Secret,
     AgeKey,
 }
 
-impl SecretKind {
+impl LegacyKind {
     fn suffix(self) -> &'static str {
         match self {
-            SecretKind::S3Secret => "s3-secret",
-            SecretKind::AgeKey => "age-key",
+            LegacyKind::S3Secret => "s3-secret",
+            LegacyKind::AgeKey => "age-key",
         }
     }
 }
@@ -99,36 +117,74 @@ pub fn delete_profile(config_dir: &Path, id: &str) -> AppResult<()> {
     profiles.retain(|p| p.id != id);
     write_profiles(config_dir, &profiles)?;
     // Best-effort secret cleanup; ignore "not found".
-    let _ = delete_secret(id, SecretKind::S3Secret);
-    let _ = delete_secret(id, SecretKind::AgeKey);
+    let _ = delete_secrets(id);
     Ok(())
 }
 
-fn keyring_entry(id: &str, kind: SecretKind) -> AppResult<keyring::Entry> {
+fn creds_entry(id: &str) -> AppResult<keyring::Entry> {
+    let account = format!("{id}::creds");
+    keyring::Entry::new(KEYRING_SERVICE, &account).map_err(AppError::from)
+}
+
+fn legacy_entry(id: &str, kind: LegacyKind) -> AppResult<keyring::Entry> {
     let account = format!("{id}::{}", kind.suffix());
     keyring::Entry::new(KEYRING_SERVICE, &account).map_err(AppError::from)
 }
 
-/// Store a secret in the OS secure store.
-pub fn set_secret(id: &str, kind: SecretKind, value: &str) -> AppResult<()> {
-    keyring_entry(id, kind)?.set_password(value)?;
+fn legacy_get(id: &str, kind: LegacyKind) -> Option<String> {
+    legacy_entry(id, kind).ok()?.get_password().ok()
+}
+
+/// Best-effort deletion of a legacy per-kind entry; ignores any error.
+fn legacy_delete(id: &str, kind: LegacyKind) {
+    if let Ok(entry) = legacy_entry(id, kind) {
+        let _ = entry.delete_credential();
+    }
+}
+
+/// Read both secrets for a profile in a single keyring access. If only the old
+/// per-kind entries exist, they are read once and migrated into the bundled
+/// entry (and the old ones removed) so subsequent connects prompt only once.
+pub fn get_secrets(id: &str) -> AppResult<StoredSecrets> {
+    match creds_entry(id)?.get_password() {
+        Ok(json) => Ok(serde_json::from_str(&json).unwrap_or_default()),
+        Err(keyring::Error::NoEntry) => migrate_legacy(id),
+        Err(e) => Err(AppError::from(e)),
+    }
+}
+
+fn migrate_legacy(id: &str) -> AppResult<StoredSecrets> {
+    let secrets = StoredSecrets {
+        s3_secret: legacy_get(id, LegacyKind::S3Secret),
+        age_key: legacy_get(id, LegacyKind::AgeKey),
+    };
+    if !secrets.is_empty() {
+        // Best-effort: bundle forward, then drop the old entries.
+        let _ = set_secrets(id, &secrets);
+        legacy_delete(id, LegacyKind::S3Secret);
+        legacy_delete(id, LegacyKind::AgeKey);
+    }
+    Ok(secrets)
+}
+
+/// Store both secrets in a single keyring entry. Writing an empty set deletes
+/// the entry instead.
+pub fn set_secrets(id: &str, secrets: &StoredSecrets) -> AppResult<()> {
+    if secrets.is_empty() {
+        return delete_secrets(id);
+    }
+    let json = serde_json::to_string(secrets)?;
+    creds_entry(id)?.set_password(&json)?;
     Ok(())
 }
 
-/// Read a secret from the OS secure store, if present.
-pub fn get_secret(id: &str, kind: SecretKind) -> AppResult<Option<String>> {
-    match keyring_entry(id, kind)?.get_password() {
-        Ok(v) => Ok(Some(v)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(AppError::from(e)),
+/// Delete a profile's bundled (and any leftover legacy) secrets.
+pub fn delete_secrets(id: &str) -> AppResult<()> {
+    match creds_entry(id)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => {}
+        Err(e) => return Err(AppError::from(e)),
     }
-}
-
-/// Delete a secret from the OS secure store.
-pub fn delete_secret(id: &str, kind: SecretKind) -> AppResult<()> {
-    match keyring_entry(id, kind)?.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(AppError::from(e)),
-    }
+    legacy_delete(id, LegacyKind::S3Secret);
+    legacy_delete(id, LegacyKind::AgeKey);
+    Ok(())
 }

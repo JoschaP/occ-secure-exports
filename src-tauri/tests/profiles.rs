@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use occ_companion_lib::profile::{
-    self, delete_secret, get_secret, set_secret, ConnectionProfile, SecretKind,
+    self, delete_secrets, get_secrets, set_secrets, ConnectionProfile, StoredSecrets,
 };
 
 fn tmp_dir(tag: &str) -> PathBuf {
@@ -62,13 +62,20 @@ fn profiles_and_secrets() {
     assert_eq!(profile::load_profiles(&dir).unwrap().len(), 2);
 
     // Secret API exercises cleanly (the mock keyring is per-Entry, so it can't
-    // model cross-Entry persistence — real round-trips are covered manually /
-    // by the live keychain; here we assert the code paths don't error).
-    set_secret("p1", SecretKind::S3Secret, "s3-secret-value").unwrap();
-    set_secret("p1", SecretKind::AgeKey, "AGE-SECRET-KEY-1XXXX").unwrap();
-    get_secret("p1", SecretKind::S3Secret).unwrap();
-    // delete_secret on a missing entry is a no-op (not an error).
-    delete_secret("p2", SecretKind::S3Secret).unwrap();
+    // model persistence across separate Entry::new calls — real round-trips are
+    // covered by the live keychain; here we assert the code paths don't error).
+    set_secrets(
+        "p1",
+        &StoredSecrets {
+            s3_secret: Some("s3-secret-value".into()),
+            age_key: Some("AGE-SECRET-KEY-1XXXX".into()),
+        },
+    )
+    .unwrap();
+    get_secrets("p1").unwrap();
+    // Writing an empty set clears the entry; reading a missing one is no-op.
+    set_secrets("p1", &StoredSecrets::default()).unwrap();
+    delete_secrets("p2").unwrap();
 
     // Deleting a profile removes it from the list (and clears secrets best-effort).
     profile::delete_profile(&dir, "p1").unwrap();

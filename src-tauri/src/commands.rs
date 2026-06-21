@@ -14,7 +14,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::crypto::{self, Identity};
 use crate::download;
 use crate::error::{AppError, AppResult};
-use crate::profile::{self, ConnectionProfile, SecretKind};
+use crate::profile::{self, ConnectionProfile, StoredSecrets};
 use crate::s3::{self, ObjectInfo};
 
 /// In-memory session for the connected bucket. Holds secrets; never serialized.
@@ -103,15 +103,28 @@ async fn resolve_credentials(
     profile: &ConnectionProfile,
     creds: &Credentials,
 ) -> AppResult<(String, Vec<Identity>)> {
+    // Read any stored secrets once (single keychain access). Inline overrides
+    // from the form take precedence and avoid the read entirely when both are
+    // supplied.
+    let needs_store = creds.secret_access_key.as_deref().unwrap_or("").is_empty()
+        || creds.age_key.as_deref().unwrap_or("").is_empty();
+    let stored = if needs_store {
+        profile::get_secrets(&profile.id)?
+    } else {
+        StoredSecrets::default()
+    };
+
     let secret = match &creds.secret_access_key {
         Some(s) if !s.is_empty() => s.clone(),
-        _ => profile::get_secret(&profile.id, SecretKind::S3Secret)?
+        _ => stored
+            .s3_secret
             .ok_or_else(|| AppError::Config("No secret access key available.".into()))?,
     };
 
     let key_material = match &creds.age_key {
         Some(k) if !k.is_empty() => k.clone(),
-        _ => profile::get_secret(&profile.id, SecretKind::AgeKey)?
+        _ => stored
+            .age_key
             .ok_or_else(|| AppError::Key("No private key available.".into()))?,
     };
 
@@ -161,22 +174,31 @@ pub fn save_profile(
 ) -> AppResult<()> {
     let dir = config_dir(&app)?;
 
-    if profile.remember_secret {
-        if let Some(secret) = creds.secret_access_key.as_deref().filter(|s| !s.is_empty()) {
-            profile::set_secret(&profile.id, SecretKind::S3Secret, secret)?;
-        }
-    } else {
-        profile::delete_secret(&profile.id, SecretKind::S3Secret)?;
-    }
+    let new_secret = creds.secret_access_key.as_deref().filter(|s| !s.is_empty());
+    let new_key = creds.age_key.as_deref().filter(|s| !s.is_empty());
 
-    if profile.remember_key {
-        if let Some(key) = creds.age_key.as_deref().filter(|s| !s.is_empty()) {
-            profile::set_secret(&profile.id, SecretKind::AgeKey, key)?;
-        }
+    // Only read the existing bundle when a remembered field was left blank (an
+    // edit that keeps the stored value) — a fresh save avoids the keychain read.
+    let keep_secret = profile.remember_secret && new_secret.is_none();
+    let keep_key = profile.remember_key && new_key.is_none();
+    let mut stored = if keep_secret || keep_key {
+        profile::get_secrets(&profile.id)?
     } else {
-        profile::delete_secret(&profile.id, SecretKind::AgeKey)?;
-    }
+        StoredSecrets::default()
+    };
 
+    stored.s3_secret = if profile.remember_secret {
+        new_secret.map(str::to_string).or(stored.s3_secret)
+    } else {
+        None
+    };
+    stored.age_key = if profile.remember_key {
+        new_key.map(str::to_string).or(stored.age_key)
+    } else {
+        None
+    };
+
+    profile::set_secrets(&profile.id, &stored)?;
     profile::upsert_profile(&dir, profile)
 }
 
@@ -189,7 +211,7 @@ pub fn delete_profile(app: AppHandle, id: String) -> AppResult<()> {
 /// key. `None` if no key is stored or it is not a native age key.
 #[tauri::command]
 pub fn profile_public_key(id: String) -> AppResult<Option<String>> {
-    match profile::get_secret(&id, SecretKind::AgeKey)? {
+    match profile::get_secrets(&id)?.age_key {
         Some(material) => Ok(crypto::public_key_for(&material)),
         None => Ok(None),
     }
@@ -200,7 +222,8 @@ pub fn profile_public_key(id: String) -> AppResult<Option<String>> {
 /// the frontend on this path.
 #[tauri::command]
 pub fn export_rescue_kit(id: String, path: String) -> AppResult<()> {
-    let material = profile::get_secret(&id, SecretKind::AgeKey)?
+    let material = profile::get_secrets(&id)?
+        .age_key
         .ok_or_else(|| AppError::Key("No private key is stored for this connection.".into()))?;
     let public = crypto::public_key_for(&material);
     let kit = rescue_kit_text(public.as_deref(), &material);
@@ -248,9 +271,10 @@ fn rescue_kit_text(public: Option<&str>, private: &str) -> String {
 /// UI knows whether it must prompt for them.
 #[tauri::command]
 pub fn secret_status(id: String) -> AppResult<SecretStatus> {
+    let stored = profile::get_secrets(&id)?;
     Ok(SecretStatus {
-        has_secret: profile::get_secret(&id, SecretKind::S3Secret)?.is_some(),
-        has_key: profile::get_secret(&id, SecretKind::AgeKey)?.is_some(),
+        has_secret: stored.s3_secret.is_some(),
+        has_key: stored.age_key.is_some(),
     })
 }
 
