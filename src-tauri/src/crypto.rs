@@ -97,6 +97,23 @@ pub fn public_key_for(material: &str) -> Option<String> {
     None
 }
 
+/// Check whether `identities` can decrypt an age file given only the start of
+/// it (the header). `Some(true)` = a key matches, `Some(false)` = no matching
+/// key, `None` = couldn't determine (not age / truncated header). The body is
+/// never needed: the recipient stanzas live in the header.
+pub fn matches_key(header_prefix: &[u8], identities: &[Identity]) -> Option<bool> {
+    match age::Decryptor::new(header_prefix) {
+        Ok(decryptor) => {
+            match decryptor.decrypt(identities.iter().map(|i| i.as_ref() as &dyn age::Identity)) {
+                Ok(_) => Some(true),
+                Err(age::DecryptError::NoMatchingKeys) => Some(false),
+                Err(_) => None,
+            }
+        }
+        Err(_) => None,
+    }
+}
+
 /// Stream-decrypt `src` into `dst`, invoking `on_progress` with the running
 /// count of plaintext bytes written. Returns the total bytes written.
 pub fn decrypt_stream<R, W>(
@@ -205,5 +222,18 @@ mod tests {
         let mut out = Vec::new();
         let res = decrypt_stream(&ciphertext[..], &mut out, &bob_ids, |_| {});
         assert!(res.is_err(), "decryption with the wrong key must fail");
+    }
+
+    #[test]
+    fn matches_key_detects_right_and_wrong_key() {
+        let alice = generate_keypair();
+        let bob = generate_keypair();
+        let ct = encrypt_for(&alice.public_key, b"header probe payload");
+        let alice_ids = parse_identities(&alice.private_key).unwrap();
+        let bob_ids = parse_identities(&bob.private_key).unwrap();
+
+        assert_eq!(matches_key(&ct, &alice_ids), Some(true));
+        assert_eq!(matches_key(&ct, &bob_ids), Some(false));
+        assert_eq!(matches_key(b"not an age file", &alice_ids), None);
     }
 }

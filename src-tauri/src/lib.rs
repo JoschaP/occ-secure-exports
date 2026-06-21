@@ -28,6 +28,7 @@ pub fn run() {
             commands::export_rescue_kit,
             commands::secret_status,
             commands::connect,
+            commands::check_keys,
             commands::list_objects,
             commands::disconnect,
             commands::download_decrypt,

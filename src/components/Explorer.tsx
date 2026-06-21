@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Tree, type NodeApi, type NodeRendererProps } from "react-arborist";
 import {
   ActionIcon,
@@ -25,6 +25,14 @@ import {
 import type { ObjectInfo, TreeNode } from "../types";
 import { buildTree, collectKeys, formatBytes, formatDate } from "../lib/tree";
 import { Wordmark } from "./Wordmark";
+import { api } from "../api";
+
+interface KeyStatus {
+  matches: number;
+  mismatches: number;
+  plain: number;
+  unknown: number;
+}
 
 interface Props {
   bucket: string;
@@ -98,6 +106,35 @@ export function Explorer({
 
   const selectedKeys = useMemo(() => uniqueKeys(selected), [selected]);
   const count = selectedKeys.length;
+  const hasAge = useMemo(
+    () => selectedKeys.some((k) => k.toLowerCase().endsWith(".age")),
+    [selectedKeys],
+  );
+
+  // Pre-flight: can the connected key decrypt the selected .age files?
+  const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const selectionId = selectedKeys.join("\n");
+  useEffect(() => {
+    if (!selectedKeys.length || !hasAge) {
+      setKeyStatus(null);
+      return;
+    }
+    let cancelled = false;
+    setChecking(true);
+    const t = setTimeout(() => {
+      api
+        .checkKeys(selectedKeys)
+        .then((s) => !cancelled && setKeyStatus(s))
+        .catch(() => !cancelled && setKeyStatus(null))
+        .finally(() => !cancelled && setChecking(false));
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionId, hasAge]);
   const totalSize = useMemo(
     () => objects.reduce((sum, o) => sum + o.size, 0),
     [objects],
@@ -130,7 +167,28 @@ export function Explorer({
 
         {count > 0 && (
           <Text className="selection-count">
-            {count} file{count === 1 ? "" : "s"} selected
+            {count} file{count === 1 ? "" : "s"}
+            {checking && (
+              <Text span c="dimmed">
+                {" "}
+                · checking key…
+              </Text>
+            )}
+            {!checking && keyStatus && keyStatus.mismatches > 0 && (
+              <Text span c="red">
+                {" "}
+                · key can&apos;t decrypt {keyStatus.mismatches}
+              </Text>
+            )}
+            {!checking &&
+              keyStatus &&
+              keyStatus.mismatches === 0 &&
+              keyStatus.matches > 0 && (
+                <Text span c="green">
+                  {" "}
+                  · key matches
+                </Text>
+              )}
           </Text>
         )}
         <Button
@@ -138,7 +196,7 @@ export function Explorer({
           disabled={count === 0}
           onClick={() => onDownload(selectedKeys)}
         >
-          Download &amp; decrypt
+          {hasAge ? "Download & decrypt" : "Download"}
         </Button>
         <Tooltip label="Close connection" withArrow>
           <ActionIcon variant="subtle" color="gray" onClick={onDisconnect} size="lg">

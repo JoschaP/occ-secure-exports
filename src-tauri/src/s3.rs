@@ -114,6 +114,30 @@ where
     }
 }
 
+/// Fetch only the first `last_byte + 1` bytes of an object (HTTP Range), e.g.
+/// to inspect an age header without downloading the whole file.
+pub async fn fetch_prefix(
+    client: &Client,
+    bucket: &str,
+    key: &str,
+    last_byte: u64,
+) -> AppResult<Vec<u8>> {
+    let resp = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .range(format!("bytes=0-{last_byte}"))
+        .send()
+        .await
+        .map_err(|e| AppError::S3(friendly_s3(&e)))?;
+    let data = resp
+        .body
+        .collect()
+        .await
+        .map_err(|e| AppError::S3(e.to_string()))?;
+    Ok(data.into_bytes().to_vec())
+}
+
 /// List every object under `prefix` (paginated, follows continuation tokens).
 pub async fn list_objects(
     client: &Client,

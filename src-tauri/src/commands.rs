@@ -283,6 +283,48 @@ pub async fn connect(
     Ok(result)
 }
 
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckSummary {
+    matches: u32,
+    mismatches: u32,
+    plain: u32,
+    unknown: u32,
+}
+
+/// Pre-flight: for the selected keys, check (via a small header range request)
+/// whether the connected key can decrypt each `.age` object. Non-age objects
+/// count as `plain` (they'll just download).
+#[tauri::command]
+pub async fn check_keys(state: State<'_, AppState>, keys: Vec<String>) -> AppResult<CheckSummary> {
+    let (client, bucket, identities) = {
+        let guard = state.session.lock().await;
+        let session = guard.as_ref().ok_or(AppError::NotConnected)?;
+        (
+            session.client.clone(),
+            session.bucket.clone(),
+            session.identities.clone(),
+        )
+    };
+
+    let mut summary = CheckSummary::default();
+    for key in keys {
+        if !key.to_ascii_lowercase().ends_with(".age") {
+            summary.plain += 1;
+            continue;
+        }
+        match s3::fetch_prefix(&client, &bucket, &key, 65535).await {
+            Ok(bytes) => match crypto::matches_key(&bytes, &identities) {
+                Some(true) => summary.matches += 1,
+                Some(false) => summary.mismatches += 1,
+                None => summary.unknown += 1,
+            },
+            Err(_) => summary.unknown += 1,
+        }
+    }
+    Ok(summary)
+}
+
 #[tauri::command]
 pub async fn list_objects(
     state: State<'_, AppState>,

@@ -49,7 +49,10 @@ pub async fn download_and_decrypt(
         .unwrap_or("download");
     let tmp_path = dest_path.with_file_name(format!(".{file_name}.occ-part{counter}"));
 
-    let bridge = SyncIoBridge::new(body);
+    // `.age` objects are decrypted; everything else is passed through unchanged.
+    let decrypt = key.to_ascii_lowercase().ends_with(".age");
+
+    let mut bridge = SyncIoBridge::new(body);
     let dest = dest_path.to_path_buf();
     let tmp = tmp_path.clone();
 
@@ -60,9 +63,13 @@ pub async fn download_and_decrypt(
         let file = std::fs::File::create(&tmp)?;
         let mut writer = std::io::BufWriter::new(file);
 
-        let written = crypto::decrypt_stream(bridge, &mut writer, &identities, |done| {
-            progress(done, total)
-        })?;
+        let written = if decrypt {
+            crypto::decrypt_stream(bridge, &mut writer, &identities, |done| {
+                progress(done, total)
+            })?
+        } else {
+            copy_stream(&mut bridge, &mut writer, |done| progress(done, total))?
+        };
 
         let file = writer
             .into_inner()
@@ -79,6 +86,30 @@ pub async fn download_and_decrypt(
         let _ = std::fs::remove_file(&tmp_path);
     }
     result
+}
+
+/// Stream-copy `src` to `dst` in 64 KiB chunks, reporting progress. Used for
+/// non-`.age` objects (passed through unchanged, no decryption).
+fn copy_stream<R: std::io::Read, W: std::io::Write>(
+    src: &mut R,
+    dst: &mut W,
+    mut on_progress: impl FnMut(u64),
+) -> AppResult<u64> {
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut total: u64 = 0;
+    loop {
+        let n = src
+            .read(&mut buf)
+            .map_err(|e| AppError::Io(e.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        dst.write_all(&buf[..n])?;
+        total += n as u64;
+        on_progress(total);
+    }
+    dst.flush()?;
+    Ok(total)
 }
 
 /// Derive a SAFE output file name from an object key: take the last path
