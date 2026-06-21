@@ -23,7 +23,9 @@ pnpm tauri dev      # run the app
 
 ### Task runner & dev shortcuts
 
-A [`justfile`](justfile) bundles the common commands — run `just` to list them:
+A [`justfile`](justfile) bundles the common commands. Install
+[`just`](https://just.systems) (`brew install just`), then run `just` to list
+them:
 
 ```bash
 just dev        # run the app
