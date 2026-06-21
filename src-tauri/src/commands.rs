@@ -450,7 +450,10 @@ pub async fn check_update(app: AppHandle) -> AppResult<UpdateInfo> {
     if latest.is_empty() {
         return Ok(fallback);
     }
-    let url = json["html_url"].as_str().unwrap_or(RELEASES_URL).to_string();
+    let url = json["html_url"]
+        .as_str()
+        .unwrap_or(RELEASES_URL)
+        .to_string();
     let update_available = version_gt(&latest, &current);
     Ok(UpdateInfo {
         current,

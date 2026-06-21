@@ -1,19 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import {
-  Group,
-  Modal,
-  Progress,
-  Stack,
-  Text,
-  ThemeIcon,
-} from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import {
-  IconAlertTriangle,
-  IconCircleCheck,
-  IconLoader2,
-} from "@tabler/icons-react";
+import { IconAlertTriangle, IconCircleCheck } from "@tabler/icons-react";
 import { open, save, confirm } from "@tauri-apps/plugin-dialog";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -25,28 +14,20 @@ import type {
   Credentials,
   UpdateInfo,
 } from "./types";
-import { formatBytes, type DownloadPlanItem } from "./lib/tree";
+import { type DownloadPlanItem } from "./lib/tree";
 import { useIdleDisconnect } from "./hooks/useIdleDisconnect";
 import { ProfileList } from "./components/ProfileList";
 import { ConnectionForm } from "./components/ConnectionForm";
 import { Explorer } from "./components/Explorer";
 import { KeygenDialog } from "./components/KeygenDialog";
 import { UpdateDialog } from "./components/UpdateDialog";
+import { DownloadSidebar, type DlItem } from "./components/DownloadSidebar";
 import { Footer } from "./components/Footer";
 
 type View = "list" | "form" | "explorer";
 
-interface DlItem {
-  name: string;
-  done: number;
-  total: number;
-  status: "running" | "ok" | "error";
-  error?: string;
-}
-
 interface DlState {
   open: boolean;
-  dest: string;
   items: Record<string, DlItem>;
 }
 
@@ -55,16 +36,9 @@ interface DlState {
 const START_WIDTH = 760;
 const START_MIN_INNER_H = 515; // content+footer floor (matches tauri minHeight)
 const FOOTER_H = 35; // fixed footer height (keep in sync with .footer)
-
-async function sizeExplorerWindow() {
-  try {
-    const w = getCurrentWindow();
-    await w.setSize(new LogicalSize(1080, 720));
-    await w.center();
-  } catch {
-    /* window API unavailable (e.g. tests) — ignore */
-  }
-}
+const EXPLORER_W = 1080;
+const EXPLORER_H = 720;
+const SIDEBAR_W = 320; // download-queue sidebar, docked on the right
 
 export default function App() {
   const [view, setView] = useState<View>("list");
@@ -80,10 +54,14 @@ export default function App() {
   >([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [dl, setDl] = useState<DlState>({ open: false, dest: "", items: {} });
+  const [dl, setDl] = useState<DlState>({ open: false, items: {} });
   const [version, setVersion] = useState("");
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [updateOpen, setUpdateOpen] = useState(false);
+
+  const dlItems = Object.values(dl.items);
+  const downloading = dlItems.some((i) => i.status === "running");
+  const sidebarOpen = dl.open && dlItems.length > 0;
 
   useEffect(() => {
     getVersion()
@@ -165,6 +143,7 @@ export default function App() {
               ...it,
               status: e.ok ? "ok" : "error",
               error: e.error ?? undefined,
+              path: e.path ?? it.path,
               done: e.ok ? it.total || it.done : it.done,
             },
           },
@@ -206,7 +185,8 @@ export default function App() {
         // added on top because setSize targets the outer window.
         const inner = Math.max(content + FOOTER_H, START_MIN_INNER_H);
         const h = Math.min(inner + chrome + 2, cap); // +2 guards sub-pixel
-        win.setSize(new LogicalSize(START_WIDTH, h)).catch(() => {});
+        const w = START_WIDTH + (sidebarOpen ? SIDEBAR_W : 0);
+        win.setSize(new LogicalSize(w, h)).catch(() => {});
       });
     };
     fit();
@@ -216,7 +196,17 @@ export default function App() {
       ro.disconnect();
       cancelAnimationFrame(frame);
     };
-  }, [view]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, sidebarOpen]);
+
+  // Explorer window size; widens when the download sidebar is open.
+  useLayoutEffect(() => {
+    if (view !== "explorer") return;
+    const w = EXPLORER_W + (sidebarOpen ? SIDEBAR_W : 0);
+    getCurrentWindow()
+      .setSize(new LogicalSize(w, EXPLORER_H))
+      .catch(() => {});
+  }, [view, sidebarOpen]);
 
   function fail(title: string, e: unknown) {
     notifications.show({
@@ -236,7 +226,6 @@ export default function App() {
       setSession(res);
       setObjects(objs);
       setView("explorer");
-      void sizeExplorerWindow();
       reloadProfiles();
     } catch (e) {
       fail("Could not connect", e);
@@ -257,7 +246,6 @@ export default function App() {
       setSession(res);
       setObjects(objs);
       setView("explorer");
-      void sizeExplorerWindow();
       reloadProfiles();
     } catch (e) {
       if (/No (secret access key|private key) available/i.test(String(e))) {
@@ -365,12 +353,19 @@ export default function App() {
       title: "Choose a folder to save into",
     });
     if (!dir || Array.isArray(dir)) return;
-    const items: Record<string, DlItem> = {};
+    const added: Record<string, DlItem> = {};
     for (const p of plan) {
-      // Show the relative path so folder structure is visible while it runs.
-      items[p.key] = { name: p.relPath, done: 0, total: 0, status: "running" };
+      added[p.key] = {
+        key: p.key,
+        relPath: p.relPath,
+        destDir: dir,
+        done: 0,
+        total: 0,
+        status: "running",
+      };
     }
-    setDl({ open: true, dest: dir, items });
+    // Accumulate into the queue instead of replacing it.
+    setDl((d) => ({ open: true, items: { ...d.items, ...added } }));
     try {
       await api.downloadDecrypt(plan, dir);
     } catch (e) {
@@ -378,10 +373,44 @@ export default function App() {
     }
   }
 
-  const dlItems = Object.values(dl.items);
-  const allDone =
-    dlItems.length > 0 && dlItems.every((i) => i.status !== "running");
-  const downloading = dlItems.some((i) => i.status === "running");
+  async function retryItem(key: string) {
+    const it = dl.items[key];
+    if (!it) return;
+    setDl((d) => ({
+      ...d,
+      items: {
+        ...d.items,
+        [key]: { ...it, status: "running", done: 0, error: undefined },
+      },
+    }));
+    try {
+      await api.downloadDecrypt(
+        [{ key: it.key, relPath: it.relPath }],
+        it.destDir,
+      );
+    } catch (e) {
+      fail("Download failed", e);
+    }
+  }
+
+  async function revealItem(path: string) {
+    try {
+      await revealItemInDir(path);
+    } catch (e) {
+      fail("Could not open the folder", e);
+    }
+  }
+
+  function clearFinished() {
+    setDl((d) => {
+      const items: Record<string, DlItem> = {};
+      for (const [k, v] of Object.entries(d.items)) {
+        if (v.status === "running") items[k] = v;
+      }
+      return { open: Object.keys(items).length > 0, items };
+    });
+  }
+
 
   // Drop the session (and the in-memory key) after inactivity. A running
   // download keeps it alive so a long transfer is never interrupted.
@@ -402,64 +431,78 @@ export default function App() {
 
   return (
     <>
-      {view === "explorer" && session ? (
-        <Explorer
-          bucket={session.bucket}
-          basePrefix={session.basePrefix}
-          objects={objects}
-          version={version}
-          refreshing={refreshing}
-          onRefresh={refresh}
-          onDisconnect={disconnect}
-          onDownload={handleDownload}
-        />
-      ) : (
-        <div className="start-shell">
-          <div className="start-scroll">
-            <div ref={contentRef}>
-              {view === "form" ? (
-                <ConnectionForm
-                  initial={editing}
-                  injectedKey={injectedKey}
-                  onCancel={() => {
-                    setView("list");
-                    setEditing(null);
-                    setInjectedKey(null);
-                    reloadProfiles();
-                  }}
-                  onConnect={doConnect}
-                  onGenerateKey={() => setKeygenOpen(true)}
-                />
-              ) : (
-                <ProfileList
-                  profiles={profiles}
-                  connectingId={connectingId}
-                  onConnect={connectFromList}
-                  onEdit={(p) => {
-                    setEditing(p);
-                    setInjectedKey(null);
-                    setView("form");
-                  }}
-                  onCopyPublicKey={copyPublicKey}
-                  onExportKit={exportKit}
-                  onDelete={deleteProfile}
-                  onNew={() => {
-                    setEditing(null);
-                    setInjectedKey(null);
-                    setView("form");
-                  }}
-                  onGenerateKey={() => setKeygenOpen(true)}
-                />
-              )}
+      <div className="app-shell">
+        <div className="app-main">
+          {view === "explorer" && session ? (
+            <Explorer
+              bucket={session.bucket}
+              basePrefix={session.basePrefix}
+              objects={objects}
+              version={version}
+              refreshing={refreshing}
+              onRefresh={refresh}
+              onDisconnect={disconnect}
+              onDownload={handleDownload}
+            />
+          ) : (
+            <div className="start-shell">
+              <div className="start-scroll">
+                <div ref={contentRef}>
+                  {view === "form" ? (
+                    <ConnectionForm
+                      initial={editing}
+                      injectedKey={injectedKey}
+                      onCancel={() => {
+                        setView("list");
+                        setEditing(null);
+                        setInjectedKey(null);
+                        reloadProfiles();
+                      }}
+                      onConnect={doConnect}
+                      onGenerateKey={() => setKeygenOpen(true)}
+                    />
+                  ) : (
+                    <ProfileList
+                      profiles={profiles}
+                      connectingId={connectingId}
+                      onConnect={connectFromList}
+                      onEdit={(p) => {
+                        setEditing(p);
+                        setInjectedKey(null);
+                        setView("form");
+                      }}
+                      onCopyPublicKey={copyPublicKey}
+                      onExportKit={exportKit}
+                      onDelete={deleteProfile}
+                      onNew={() => {
+                        setEditing(null);
+                        setInjectedKey(null);
+                        setView("form");
+                      }}
+                      onGenerateKey={() => setKeygenOpen(true)}
+                    />
+                  )}
+                </div>
+              </div>
+              <Footer
+                version={version}
+                updateAvailable={update?.updateAvailable}
+                onUpdateClick={() => setUpdateOpen(true)}
+              />
             </div>
-          </div>
-          <Footer
-            version={version}
-            updateAvailable={update?.updateAvailable}
-            onUpdateClick={() => setUpdateOpen(true)}
-          />
+          )}
         </div>
-      )}
+
+        {sidebarOpen && (
+          <DownloadSidebar
+            items={dlItems}
+            onClose={() => setDl((d) => ({ ...d, open: false }))}
+            onClearDone={clearFinished}
+            onReveal={revealItem}
+            onRetry={retryItem}
+          />
+        )}
+      </div>
 
       <KeygenDialog
         opened={keygenOpen}
@@ -475,83 +518,6 @@ export default function App() {
         onClose={() => setUpdateOpen(false)}
         info={update}
       />
-
-      <Modal
-        opened={dl.open}
-        onClose={() => setDl((d) => ({ ...d, open: false }))}
-        title={allDone ? "Done" : "Downloading & decrypting"}
-        closeOnClickOutside={allDone}
-        withCloseButton={allDone}
-        centered
-        size="lg"
-      >
-        <Stack gap="xs">
-          <Text size="sm" c="dimmed">
-            Saving to <b>{dl.dest}</b>
-          </Text>
-          {dlItems.map((it, i) => {
-            const pct =
-              it.total > 0
-                ? Math.min(100, (it.done / it.total) * 100)
-                : it.status === "ok"
-                  ? 100
-                  : 0;
-            return (
-              <div key={i}>
-                <Group gap="xs" wrap="nowrap" justify="space-between">
-                  <Group gap={8} wrap="nowrap" miw={0}>
-                    <StatusIcon status={it.status} />
-                    <Text size="sm" truncate>
-                      {it.name}
-                    </Text>
-                  </Group>
-                  <Text size="xs" c="dimmed">
-                    {it.status === "error" ? "failed" : formatBytes(it.done)}
-                  </Text>
-                </Group>
-                <Progress
-                  value={pct}
-                  color={
-                    it.status === "error"
-                      ? "red"
-                      : it.status === "ok"
-                        ? "green"
-                        : "primary"
-                  }
-                  size="sm"
-                  mt={4}
-                  animated={it.status === "running"}
-                />
-                {it.status === "error" && it.error && (
-                  <Text size="xs" c="red" mt={2}>
-                    {it.error}
-                  </Text>
-                )}
-              </div>
-            );
-          })}
-        </Stack>
-      </Modal>
     </>
-  );
-}
-
-function StatusIcon({ status }: { status: DlItem["status"] }) {
-  if (status === "ok")
-    return (
-      <ThemeIcon color="green" variant="light" size="sm" radius="xl">
-        <IconCircleCheck size={14} />
-      </ThemeIcon>
-    );
-  if (status === "error")
-    return (
-      <ThemeIcon color="red" variant="light" size="sm" radius="xl">
-        <IconAlertTriangle size={14} />
-      </ThemeIcon>
-    );
-  return (
-    <ThemeIcon color="gray" variant="light" size="sm" radius="xl">
-      <IconLoader2 size={14} className="spin" />
-    </ThemeIcon>
   );
 }

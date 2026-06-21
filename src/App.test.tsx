@@ -30,7 +30,12 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   confirm: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ setSize: vi.fn(), center: vi.fn() }),
+  getCurrentWindow: () => ({
+    setSize: vi.fn().mockResolvedValue(undefined),
+    center: vi.fn().mockResolvedValue(undefined),
+    scaleFactor: vi.fn().mockResolvedValue(1),
+    outerSize: vi.fn().mockResolvedValue({ width: 760, height: 620 }),
+  }),
   LogicalSize: class {
     constructor(
       public width: number,
