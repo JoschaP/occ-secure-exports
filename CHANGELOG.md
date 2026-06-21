@@ -1,3 +1,10 @@
+## [0.9.3](https://github.com/JoschaP/occ-secure-exports/compare/v0.9.2...v0.9.3) (2026-06-21)
+
+
+### Bug Fixes
+
+* **icon:** add macOS icon-grid padding so the app icon isn't oversized ([ec3b4c4](https://github.com/JoschaP/occ-secure-exports/commit/ec3b4c49092125f61aac84f770f6026d8b38a37e))
+
 ## [0.9.2](https://github.com/JoschaP/occ-secure-exports/compare/v0.9.1...v0.9.2) (2026-06-21)
 
 
