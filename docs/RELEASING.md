@@ -47,5 +47,5 @@ package managers.
 ## Code signing (optional)
 
 Bundles are unsigned by default. To sign/notarize, add the documented secrets
-(see the README's *Signing & notarization* section) — the workflows already
+(see the README's _Signing & notarization_ section) — the workflows already
 consume them.

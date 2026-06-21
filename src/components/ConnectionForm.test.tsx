@@ -49,7 +49,10 @@ describe("ConnectionForm", () => {
         onGenerateKey={vi.fn()}
       />,
     );
-    await user.type(screen.getByLabelText(/Endpoint URL/i), "http://insecure.test");
+    await user.type(
+      screen.getByLabelText(/Endpoint URL/i),
+      "http://insecure.test",
+    );
     expect(await screen.findByText(/uses plain/i)).toBeInTheDocument();
   });
 
@@ -64,7 +67,9 @@ describe("ConnectionForm", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: /^Save$/ }));
-    expect(await screen.findByText(/give this connection a name/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/give this connection a name/i),
+    ).toBeInTheDocument();
     expect(mockApi.saveProfile).not.toHaveBeenCalled();
   });
 

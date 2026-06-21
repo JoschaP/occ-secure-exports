@@ -7,7 +7,7 @@ parts separated by a hard trust boundary:
 - a **Rust core** that does all networking (S3) and all cryptography (`age`).
 
 Everything sensitive — the private key, the S3 secret, the decryption — lives in
-the Rust core. The frontend is treated as the *less* trusted half and is
+the Rust core. The frontend is treated as the _less_ trusted half and is
 deliberately fenced off from the network.
 
 ```
@@ -52,29 +52,29 @@ The WebView can only talk to the core through the **Tauri command surface**
 
 ### Frontend (`src/`)
 
-| File | Responsibility |
-| --- | --- |
-| `App.tsx` | Orchestrator: view state (list / form / explorer), download queue state, update check, idle auto-disconnect wiring |
-| `components/DownloadSidebar.tsx` | Docked download queue: per-file progress, show-in-folder, retry |
-| `components/UpdateDialog.tsx` | "Update available" dialog with per-OS upgrade instructions |
-| `components/Explorer.tsx` | Bucket tree, multi-select, key pre-check, download trigger, status bar |
-| `components/ConnectionForm.tsx` | Add/edit a connection; key entry / generation |
-| `components/KeygenDialog.tsx` | Generate a key pair; enforce Rescue Kit download |
-| `hooks/useIdleDisconnect.ts` | Drop the session after inactivity (pauses while a download runs) |
-| `lib/tree.ts` | `buildTree` (keys → folder tree), `buildDownloadPlan` (selection → per-file destination paths), `checkableAgeKeys` |
-| `lib/keycheck.ts` | Per-key check cache with a TTL and summary aggregation |
-| `api.ts` | Typed `invoke()` wrappers + event listeners |
+| File                             | Responsibility                                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `App.tsx`                        | Orchestrator: view state (list / form / explorer), download queue state, update check, idle auto-disconnect wiring |
+| `components/DownloadSidebar.tsx` | Docked download queue: per-file progress, show-in-folder, retry                                                    |
+| `components/UpdateDialog.tsx`    | "Update available" dialog with per-OS upgrade instructions                                                         |
+| `components/Explorer.tsx`        | Bucket tree, multi-select, key pre-check, download trigger, status bar                                             |
+| `components/ConnectionForm.tsx`  | Add/edit a connection; key entry / generation                                                                      |
+| `components/KeygenDialog.tsx`    | Generate a key pair; enforce Rescue Kit download                                                                   |
+| `hooks/useIdleDisconnect.ts`     | Drop the session after inactivity (pauses while a download runs)                                                   |
+| `lib/tree.ts`                    | `buildTree` (keys → folder tree), `buildDownloadPlan` (selection → per-file destination paths), `checkableAgeKeys` |
+| `lib/keycheck.ts`                | Per-key check cache with a TTL and summary aggregation                                                             |
+| `api.ts`                         | Typed `invoke()` wrappers + event listeners                                                                        |
 
 ### Rust core (`src-tauri/src/`)
 
-| File | Responsibility |
-| --- | --- |
-| `commands.rs` | The command surface; holds the in-memory `Session` (client, bucket, parsed identities) |
-| `crypto.rs` | `age` keygen, identity parsing (native age + OpenSSH), **header probe** (`matches_key`), streaming decrypt |
-| `s3.rs` | Client construction (path-style, bounded timeouts, retries), paginated listing, **range fetch** |
+| File          | Responsibility                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------ |
+| `commands.rs` | The command surface; holds the in-memory `Session` (client, bucket, parsed identities)                       |
+| `crypto.rs`   | `age` keygen, identity parsing (native age + OpenSSH), **header probe** (`matches_key`), streaming decrypt   |
+| `s3.rs`       | Client construction (path-style, bounded timeouts, retries), paginated listing, **range fetch**              |
 | `download.rs` | `GetObject` stream → `age` decrypt (or pass-through) → temp file → `fsync` → atomic rename; `safe_dest_path` |
-| `profile.rs` | Connection metadata (plain JSON) + secrets (OS secure store, one bundled entry per profile) |
-| `error.rs` | Serializable, user-friendly error type |
+| `profile.rs`  | Connection metadata (plain JSON) + secrets (OS secure store, one bundled entry per profile)                  |
+| `error.rs`    | Serializable, user-friendly error type                                                                       |
 
 ## Key data flows
 
@@ -91,7 +91,7 @@ identities, builds the S3 client, validates with a 1-object probe, and stores th
 For the selected `.age` files, `check_keys` issues a **64 KiB HTTP range request**
 per object (`Range: bytes=0-65535`) and runs `crypto::matches_key`, which tries to
 decrypt only the `age` header. This reveals whether the connected key fits —
-*without downloading the files*. Results are cached per object key with a TTL on
+_without downloading the files_. Results are cached per object key with a TTL on
 the frontend, so fast navigation doesn't re-probe.
 
 ### Download & decrypt
@@ -113,15 +113,15 @@ temp file is removed, so no partial or plaintext output is ever left behind
 
 ## Threat model
 
-| Concern | Mitigation |
-| --- | --- |
-| Frontend compromise (malicious dep, XSS) exfiltrating the key | CSP `default-src 'self'` — the WebView has no network egress; the key only exists as identities in the Rust core |
-| Key/secret persisted in plaintext | Secrets live only in the OS secure store; metadata JSON never contains them. The only plaintext key file is the Rescue Kit the user *optionally* saves |
-| Crafted object key escaping the download folder (`../`, `..\`) | `safe_dest_path` drops `.`/`..`/empty segments; tested in `download.rs` |
-| Wrong key / corrupt data yielding a partial or plaintext file | Decrypt to temp + atomic rename; delete-on-error (fail-closed) |
-| Memory exhaustion on huge artifacts | Fixed 64 KiB streaming, never fully buffered |
-| Unattended decrypted key sitting in memory | Idle auto-disconnect drops the session |
-| Untrusted/`http://` endpoints | HTTPS by default; plain-HTTP triggers a loud warning |
+| Concern                                                        | Mitigation                                                                                                                                             |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Frontend compromise (malicious dep, XSS) exfiltrating the key  | CSP `default-src 'self'` — the WebView has no network egress; the key only exists as identities in the Rust core                                       |
+| Key/secret persisted in plaintext                              | Secrets live only in the OS secure store; metadata JSON never contains them. The only plaintext key file is the Rescue Kit the user _optionally_ saves |
+| Crafted object key escaping the download folder (`../`, `..\`) | `safe_dest_path` drops `.`/`..`/empty segments; tested in `download.rs`                                                                                |
+| Wrong key / corrupt data yielding a partial or plaintext file  | Decrypt to temp + atomic rename; delete-on-error (fail-closed)                                                                                         |
+| Memory exhaustion on huge artifacts                            | Fixed 64 KiB streaming, never fully buffered                                                                                                           |
+| Unattended decrypted key sitting in memory                     | Idle auto-disconnect drops the session                                                                                                                 |
+| Untrusted/`http://` endpoints                                  | HTTPS by default; plain-HTTP triggers a loud warning                                                                                                   |
 
 ## Why pure-Rust crypto/TLS
 

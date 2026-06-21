@@ -24,7 +24,9 @@ export function buildTree(objects: ObjectInfo[], stripPrefix = ""): TreeNode[] {
       const isLeaf = idx === parts.length - 1;
       pathSoFar = pathSoFar ? `${pathSoFar}/${part}` : part;
       const children = (node.children ??= []);
-      let child = children.find((c) => c.name === part && c.isFolder !== isLeaf);
+      let child = children.find(
+        (c) => c.name === part && c.isFolder !== isLeaf,
+      );
 
       if (!child) {
         child = isLeaf

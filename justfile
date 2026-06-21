@@ -18,8 +18,13 @@ build:
 
 # --- quality gates (same as CI) ---
 
-# Everything CI runs: types, tests, format, lints
-check: typecheck test-fe lint test-rs
+# Everything CI runs: lints, types, tests, format
+check: lint-fe typecheck test-fe lint test-rs
+
+# Frontend lint (ESLint) + format check (Prettier)
+lint-fe:
+    pnpm lint
+    pnpm format:check
 
 # TypeScript typecheck
 typecheck:
@@ -34,9 +39,10 @@ lint:
     cd src-tauri && cargo fmt --all --check
     cd src-tauri && cargo clippy --all-targets -- -D warnings
 
-# Apply rustfmt
+# Apply rustfmt + Prettier
 fmt:
     cd src-tauri && cargo fmt --all
+    pnpm format
 
 # Rust tests (unit + profiles; e2e skips without .env.test)
 test-rs:

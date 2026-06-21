@@ -53,7 +53,9 @@ export const api = {
     invoke<FileResult[]>("download_decrypt", { items, destDir }),
 };
 
-export function onProgress(cb: (e: ProgressEvent) => void): Promise<UnlistenFn> {
+export function onProgress(
+  cb: (e: ProgressEvent) => void,
+): Promise<UnlistenFn> {
   return listen<ProgressEvent>("download://progress", (ev) => cb(ev.payload));
 }
 

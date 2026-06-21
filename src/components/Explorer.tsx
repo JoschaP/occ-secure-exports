@@ -83,7 +83,9 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
       </span>
       <span className="name">{data.name}</span>
       {!isFolder && <span className="size">{formatBytes(data.size)}</span>}
-      {!isFolder && <span className="date">{formatDate(data.lastModified)}</span>}
+      {!isFolder && (
+        <span className="date">{formatDate(data.lastModified)}</span>
+      )}
     </div>
   );
 }
@@ -243,7 +245,12 @@ export function Explorer({
         </Group>
 
         <Tooltip label="Refresh" withArrow>
-          <ActionIcon variant="subtle" color="gray" onClick={onRefresh} loading={refreshing}>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            onClick={onRefresh}
+            loading={refreshing}
+          >
             <IconRefresh size={18} />
           </ActionIcon>
         </Tooltip>
@@ -285,7 +292,12 @@ export function Explorer({
           {downloadLabel}
         </Button>
         <Tooltip label="Close connection" withArrow>
-          <ActionIcon variant="subtle" color="gray" onClick={onDisconnect} size="lg">
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            onClick={onDisconnect}
+            size="lg"
+          >
             <IconLogout size={18} />
           </ActionIcon>
         </Tooltip>
@@ -330,7 +342,12 @@ export function Explorer({
         )}
       </div>
 
-      <Group className="statusbar" justify="space-between" wrap="nowrap" gap="sm">
+      <Group
+        className="statusbar"
+        justify="space-between"
+        wrap="nowrap"
+        gap="sm"
+      >
         <Text size="xs" c="dimmed">
           {plan.length > 0
             ? `${plan.length} file${plan.length === 1 ? "" : "s"} selected · ${formatBytes(selectionSize)}`

@@ -73,7 +73,8 @@ export const theme = createTheme({
   primaryColor: "primary",
   primaryShade: { light: 8, dark: 6 },
   autoContrast: true,
-  fontFamily: "Anek Latin Regular, -apple-system, BlinkMacSystemFont, sans-serif",
+  fontFamily:
+    "Anek Latin Regular, -apple-system, BlinkMacSystemFont, sans-serif",
   fontFamilyMonospace:
     "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
   headings: {

@@ -35,7 +35,8 @@ them:
 
 ```bash
 just dev        # run the app
-just check      # everything CI runs (typecheck + tests + fmt + clippy)
+just check      # everything CI runs (lint + format + typecheck + tests + clippy)
+just fmt        # auto-format (Prettier + rustfmt)
 just test       # frontend + Rust tests
 just e2e        # e2e tests against the bucket (needs .env.test)
 just seed       # seed demo data into the test bucket
@@ -52,6 +53,8 @@ from your `.env.test` values with `VITE_DEV_ENDPOINT`, `VITE_DEV_BUCKET`,
 ## Checks (run before pushing)
 
 ```bash
+pnpm lint                                        # ESLint (React/TS)
+pnpm format:check                                # Prettier (use `pnpm format` to fix)
 pnpm exec tsc --noEmit                          # frontend types
 pnpm test                                       # frontend tests (Vitest)
 pnpm build                                       # frontend build

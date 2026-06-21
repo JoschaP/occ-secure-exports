@@ -88,7 +88,9 @@ describe("App — connections flow", () => {
     const user = userEvent.setup();
     renderUI(<App />);
     await screen.findByText(/No connections yet/i);
-    await user.click(screen.getAllByRole("button", { name: /New connection/i })[0]);
+    await user.click(
+      screen.getAllByRole("button", { name: /New connection/i })[0],
+    );
     expect(
       await screen.findByRole("heading", { name: /New connection/i }),
     ).toBeInTheDocument();
@@ -100,7 +102,11 @@ describe("App — connections flow", () => {
     mockApi.secretStatus.mockResolvedValue({ hasSecret: true, hasKey: true });
     mockApi.connect.mockResolvedValue({ bucket: "my-bucket", basePrefix: "" });
     mockApi.listObjects.mockResolvedValue([
-      { key: "log-export/2026-06-20/a.json.age", size: 1024, lastModified: null },
+      {
+        key: "log-export/2026-06-20/a.json.age",
+        size: 1024,
+        lastModified: null,
+      },
     ]);
 
     const user = userEvent.setup();
@@ -117,7 +123,9 @@ describe("App — connections flow", () => {
   it("surfaces a connection error and stays on the list", async () => {
     mockApi.listProfiles.mockResolvedValue([profile]);
     mockApi.secretStatus.mockResolvedValue({ hasSecret: true, hasKey: true });
-    mockApi.connect.mockRejectedValue("Access denied. Check your access key ID.");
+    mockApi.connect.mockRejectedValue(
+      "Access denied. Check your access key ID.",
+    );
 
     const user = userEvent.setup();
     renderUI(<App />);

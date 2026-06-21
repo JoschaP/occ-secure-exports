@@ -63,14 +63,22 @@ export function ProfileList({
       {profiles.length === 0 ? (
         <Paper withBorder p="xl" radius="md">
           <Stack align="center" gap="sm" py="lg">
-            <IconServer2 size={40} stroke={1.3} color="var(--mantine-color-dimmed)" />
+            <IconServer2
+              size={40}
+              stroke={1.3}
+              color="var(--mantine-color-dimmed)"
+            />
             <Text fw={600}>No connections yet</Text>
             <Text c="dimmed" size="sm" ta="center" maw={360}>
               Add the S3 bucket the OCC delivers your exports to. If you don't
               have an encryption key yet, generate one first.
             </Text>
             <Group mt="sm">
-              <Button variant="light" leftSection={<IconKey size={18} />} onClick={onGenerateKey}>
+              <Button
+                variant="light"
+                leftSection={<IconKey size={18} />}
+                onClick={onGenerateKey}
+              >
                 Generate a key pair
               </Button>
               <Button leftSection={<IconPlus size={18} />} onClick={onNew}>
@@ -92,7 +100,11 @@ export function ProfileList({
               onClick={() => onConnect(p)}
             >
               <Group wrap="nowrap" gap="sm">
-                <IconServer2 size={22} stroke={1.4} color="var(--mantine-color-primary-6)" />
+                <IconServer2
+                  size={22}
+                  stroke={1.4}
+                  color="var(--mantine-color-primary-6)"
+                />
                 <Box flex={1} miw={0}>
                   <Text fw={600} truncate>
                     {p.name || p.bucket}
@@ -106,7 +118,10 @@ export function ProfileList({
                     Connecting…
                   </Text>
                 ) : (
-                  <IconChevronRight size={18} color="var(--mantine-color-dimmed)" />
+                  <IconChevronRight
+                    size={18}
+                    color="var(--mantine-color-dimmed)"
+                  />
                 )}
                 <Menu position="bottom-end" withArrow>
                   <Menu.Target>

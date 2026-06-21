@@ -28,7 +28,13 @@ export function UpdateDialog({ opened, onClose, info }: Props) {
         : null;
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Update available" centered size="md">
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title="Update available"
+      centered
+      size="md"
+    >
       <Stack>
         <Text size="sm">
           A newer version is available: <b>v{info?.latest}</b>
@@ -38,8 +44,8 @@ export function UpdateDialog({ opened, onClose, info }: Props) {
         {cmd ? (
           <div>
             <Text size="sm" mb={6} c="dimmed">
-              If you installed via {os === "mac" ? "Homebrew" : "Scoop"}, update from
-              a terminal:
+              If you installed via {os === "mac" ? "Homebrew" : "Scoop"}, update
+              from a terminal:
             </Text>
             <Code block>{cmd}</Code>
             <Text size="xs" c="dimmed" mt={6}>
@@ -48,8 +54,8 @@ export function UpdateDialog({ opened, onClose, info }: Props) {
           </div>
         ) : (
           <Text size="sm" c="dimmed">
-            Download the latest <b>.deb</b> or <b>.AppImage</b> from the releases
-            page.
+            Download the latest <b>.deb</b> or <b>.AppImage</b> from the
+            releases page.
           </Text>
         )}
 

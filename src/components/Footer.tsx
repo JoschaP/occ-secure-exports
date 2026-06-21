@@ -10,7 +10,13 @@ interface Props {
 /** Slim footer reinforcing the trust model and showing the app version. */
 export function Footer({ version, updateAvailable, onUpdateClick }: Props) {
   return (
-    <Group className="footer" justify="space-between" px="md" wrap="nowrap" gap="sm">
+    <Group
+      className="footer"
+      justify="space-between"
+      px="md"
+      wrap="nowrap"
+      gap="sm"
+    >
       <Group gap={6} wrap="nowrap" miw={0}>
         <IconLock
           size={13}
@@ -23,7 +29,12 @@ export function Footer({ version, updateAvailable, onUpdateClick }: Props) {
       </Group>
       <Group gap="sm" wrap="nowrap" style={{ flexShrink: 0 }}>
         {updateAvailable && (
-          <Anchor component="button" type="button" size="xs" onClick={onUpdateClick}>
+          <Anchor
+            component="button"
+            type="button"
+            size="xs"
+            onClick={onUpdateClick}
+          >
             New version available
           </Anchor>
         )}

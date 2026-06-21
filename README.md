@@ -9,7 +9,7 @@ A small, open-source desktop app that lets you pull your **age-encrypted data
 exports** out of your own S3 bucket and decrypt them — with no command line.
 
 It is the recipient-side counterpart to the **OCC** (the cloud console)
-"controlled egress" export feature: the OCC encrypts each artifact with *age*
+"controlled egress" export feature: the OCC encrypts each artifact with _age_
 for your public key and uploads the ciphertext to a bucket **you** own. Only you
 hold the private key. OCC Secure Exports is the tool that turns those `.age` objects
 back into plaintext, on your machine.
@@ -27,17 +27,17 @@ back into plaintext, on your machine.
    prefix, with names, sizes and dates, and multi-select.
 3. On selection it does a **key pre-check** — a tiny range request reads just the
    `age` header to tell you up front whether your key can decrypt the selection
-   (*"key matches"* / *"key can't decrypt N"*), without downloading the files.
+   (_"key matches"_ / _"key can't decrypt N"_), without downloading the files.
 4. You pick files **or whole folders** and click **“Download …”**, then choose a
    destination:
    - `.age` objects are **streamed and decrypted on the fly**, saved without the
      `.age` extension (`export.json.age` → `export.json`). The button reads
-     *“Download … & decrypt”*.
+     _“Download … & decrypt”_.
    - Non-`.age` objects **pass through unchanged** (the button reads just
-     *“Download …”*).
+     _“Download …”_).
    - Folder downloads **preserve the directory structure** under the destination.
 5. A docked download sidebar shows a queue of every file with its progress
-   (plus *Show in folder* / *Retry* per item); everything is **fail-closed and atomic**
+   (plus _Show in folder_ / _Retry_ per item); everything is **fail-closed and atomic**
    (see the security model below).
 6. After a period of inactivity the connection auto-closes and the in-memory key
    is dropped (an active download keeps the session alive).
@@ -86,18 +86,18 @@ This is the whole promise of the product, so it is built to be auditable:
   request from the frontend.
 - **Secrets live in the OS secure store**, not in plaintext on disk: macOS
   Keychain, Windows Credential Manager, Linux Secret Service (libsecret), via the
-  [`keyring`](https://crates.io/crates/keyring) crate. Connection *metadata*
+  [`keyring`](https://crates.io/crates/keyring) crate. Connection _metadata_
   (endpoint, bucket, access-key **id**) is stored as plain JSON in the app config
   dir; the secret access key and the private age key are stored only in the
   secure store, and only if you opt in ("remember"). Otherwise the key is held in
   memory for the session and discarded. The **one** plaintext-on-disk path is the
-  **Rescue Kit** you may *optionally* save when generating a key — that file is
+  **Rescue Kit** you may _optionally_ save when generating a key — that file is
   written only on your explicit action, to a location you choose, and never sent
   anywhere.
 - **Streaming decryption.** S3 `GetObject` → `age` decrypt → file writer, in
   64 KiB chunks. A multi-GB artifact never sits fully in memory.
 - **Fail-closed, atomic writes.** Each file is decrypted to a temp file next to
-  the destination, `fsync`'d, then atomically renamed. On *any* error — wrong
+  the destination, `fsync`'d, then atomically renamed. On _any_ error — wrong
   key, corrupt object, integrity failure — the temp file is deleted and **no
   partial or plaintext file is left behind**.
 - **HTTPS by default.** Plain-`http://` endpoints trigger a loud warning.
@@ -129,11 +129,11 @@ can ever decrypt your exports.
 
 ## How it pairs with the OCC export feature
 
-| OCC (sender) | OCC Secure Exports (recipient) |
-| --- | --- |
-| You register a bucket you own + your age **public** key. | You add the same bucket + your **private** key. |
-| For each export, the OCC encrypts with age for your public key and uploads `…json.age`. | You browse the bucket and download & decrypt. |
-| The OCC never holds your private key. | The private key never leaves your device. |
+| OCC (sender)                                                                            | OCC Secure Exports (recipient)                  |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| You register a bucket you own + your age **public** key.                                | You add the same bucket + your **private** key. |
+| For each export, the OCC encrypts with age for your public key and uploads `…json.age`. | You browse the bucket and download & decrypt.   |
+| The OCC never holds your private key.                                                   | The private key never leaves your device.       |
 
 Object keys typically look like
 `{basePath}/{environment}/{application}/log-export/{date}/<file>.json.age`, but
@@ -178,12 +178,12 @@ Artifacts land in `src-tauri/target/release/bundle/` (`.dmg`/`.app`, `.msi`/`.ex
 Built natively for each OS (one CI runner per platform — no cross-compilation).
 All crypto and S3 I/O is pure-Rust (rustls — no system OpenSSL).
 
-| | macOS | Windows | Linux |
-| --- | --- | --- | --- |
-| Bundle | `.dmg` / `.app` (arm64 + x86_64) | `.msi` / `.exe` (NSIS) | `.deb` / `.AppImage` |
-| WebView (runtime) | WKWebView — built in | WebView2 — present on Win 11; the installer bootstraps it otherwise | WebKitGTK (`libwebkit2gtk-4.1`) — pulled in by the `.deb` |
-| Secure store | Keychain | Credential Manager | Secret Service (libsecret / gnome-keyring / KWallet) |
-| Secret files (key, Rescue Kit) | `0600` | user-profile ACLs | `0600` |
+|                                | macOS                            | Windows                                                             | Linux                                                     |
+| ------------------------------ | -------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
+| Bundle                         | `.dmg` / `.app` (arm64 + x86_64) | `.msi` / `.exe` (NSIS)                                              | `.deb` / `.AppImage`                                      |
+| WebView (runtime)              | WKWebView — built in             | WebView2 — present on Win 11; the installer bootstraps it otherwise | WebKitGTK (`libwebkit2gtk-4.1`) — pulled in by the `.deb` |
+| Secure store                   | Keychain                         | Credential Manager                                                  | Secret Service (libsecret / gnome-keyring / KWallet)      |
+| Secret files (key, Rescue Kit) | `0600`                           | user-profile ACLs                                                   | `0600`                                                    |
 
 On Linux without a Secret Service running, **"remember"** is unavailable but the
 app still works with **"ask each time"**. Object keys are sanitized so a `/` or
@@ -202,21 +202,21 @@ builds.
 
 ### macOS (Apple notarization)
 
-| Variable | Meaning |
-| --- | --- |
-| `APPLE_CERTIFICATE` | base64 of your **Developer ID Application** `.p12` |
-| `APPLE_CERTIFICATE_PASSWORD` | password for that `.p12` |
-| `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: Your Company (TEAMID)` |
-| `APPLE_ID` | Apple ID used for notarization |
-| `APPLE_PASSWORD` | app-specific password for that Apple ID |
-| `APPLE_TEAM_ID` | your Apple Developer Team ID |
+| Variable                     | Meaning                                                |
+| ---------------------------- | ------------------------------------------------------ |
+| `APPLE_CERTIFICATE`          | base64 of your **Developer ID Application** `.p12`     |
+| `APPLE_CERTIFICATE_PASSWORD` | password for that `.p12`                               |
+| `APPLE_SIGNING_IDENTITY`     | e.g. `Developer ID Application: Your Company (TEAMID)` |
+| `APPLE_ID`                   | Apple ID used for notarization                         |
+| `APPLE_PASSWORD`             | app-specific password for that Apple ID                |
+| `APPLE_TEAM_ID`              | your Apple Developer Team ID                           |
 
 ### Windows (Authenticode)
 
-| Variable | Meaning |
-| --- | --- |
-| `WINDOWS_CERTIFICATE` | base64 of your code-signing `.pfx` |
-| `WINDOWS_CERTIFICATE_PASSWORD` | password for that `.pfx` |
+| Variable                       | Meaning                            |
+| ------------------------------ | ---------------------------------- |
+| `WINDOWS_CERTIFICATE`          | base64 of your code-signing `.pfx` |
+| `WINDOWS_CERTIFICATE_PASSWORD` | password for that `.pfx`           |
 
 `digestAlgorithm` / `timestampUrl` are stubbed in `tauri.conf.json` (`sha256` +
 DigiCert). Once a certificate thumbprint is configured, signing runs

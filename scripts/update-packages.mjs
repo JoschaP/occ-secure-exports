@@ -14,20 +14,26 @@ const [version, assetsDir, caskOut, scoopOut] = process.argv.slice(2);
 const REPO = process.env.REPO || "JoschaP/occ-secure-exports";
 
 if (!version || !assetsDir || !caskOut || !scoopOut) {
-  console.error("Usage: update-packages.mjs <version> <assetsDir> <caskOut> <scoopOut>");
+  console.error(
+    "Usage: update-packages.mjs <version> <assetsDir> <caskOut> <scoopOut>",
+  );
   process.exit(1);
 }
 
 const files = readdirSync(assetsDir);
 const sha256 = (name) =>
-  createHash("sha256").update(readFileSync(join(assetsDir, name))).digest("hex");
+  createHash("sha256")
+    .update(readFileSync(join(assetsDir, name)))
+    .digest("hex");
 const url = (name) =>
   `https://github.com/${REPO}/releases/download/v${version}/${encodeURIComponent(name)}`;
 
 function pick(re, label) {
   const hit = files.find((f) => re.test(f));
   if (!hit) {
-    console.error(`Missing asset for ${label} (pattern ${re}). Found: ${files.join(", ")}`);
+    console.error(
+      `Missing asset for ${label} (pattern ${re}). Found: ${files.join(", ")}`,
+    );
     process.exit(1);
   }
   return hit;
@@ -69,7 +75,8 @@ end
 
 const scoop = {
   version,
-  description: "Retrieve & decrypt your age-encrypted data exports from your own S3 bucket.",
+  description:
+    "Retrieve & decrypt your age-encrypted data exports from your own S3 bucket.",
   homepage: `https://github.com/${REPO}`,
   license: "MIT",
   architecture: {
@@ -85,7 +92,7 @@ const scoop = {
   },
   uninstaller: {
     script: [
-      "$u = \"$env:LOCALAPPDATA\\\\OCC Secure Exports\\\\uninstall.exe\"",
+      '$u = "$env:LOCALAPPDATA\\\\OCC Secure Exports\\\\uninstall.exe"',
       "if (Test-Path $u) { Start-Process -Wait -FilePath $u -ArgumentList '/S' }",
     ],
   },
