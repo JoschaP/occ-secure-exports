@@ -7,7 +7,7 @@
 //! temp file is removed, so a wrong key or corrupt object never yields a
 //! partial or plaintext file.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -131,9 +131,33 @@ pub fn plaintext_file_name(key: &str) -> String {
     }
 }
 
+/// Join a frontend-supplied relative path onto `dest_dir`, preserving folder
+/// structure while making escape impossible. Each segment is split on `/` and
+/// `\`, and empty / `.` / `..` segments are dropped — so a malicious key such
+/// as `../../etc/passwd` collapses to `etc/passwd` *under* `dest_dir` and can
+/// never traverse outside it. If nothing survives, a safe fallback name is
+/// used. The caller is responsible for `.age` stripping on the final segment.
+pub fn safe_dest_path(dest_dir: &Path, rel_path: &str) -> PathBuf {
+    let mut out = dest_dir.to_path_buf();
+    let mut pushed = false;
+    for raw in rel_path.split(['/', '\\']) {
+        let seg = raw.trim();
+        if seg.is_empty() || seg == "." || seg == ".." {
+            continue;
+        }
+        out.push(seg);
+        pushed = true;
+    }
+    if !pushed {
+        out.push("download");
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
-    use super::plaintext_file_name;
+    use super::{plaintext_file_name, safe_dest_path};
+    use std::path::Path;
 
     #[test]
     fn strips_age_and_keeps_last_segment() {
@@ -150,5 +174,36 @@ mod tests {
         assert_eq!(plaintext_file_name(".."), "download");
         assert_eq!(plaintext_file_name("dir/"), "dir");
         assert_eq!(plaintext_file_name(""), "download");
+    }
+
+    #[test]
+    fn safe_dest_path_preserves_structure() {
+        let base = Path::new("/dest");
+        assert_eq!(
+            safe_dest_path(base, "backups/2026-06-20/db-snapshot.sql"),
+            Path::new("/dest/backups/2026-06-20/db-snapshot.sql"),
+        );
+        assert_eq!(
+            safe_dest_path(base, "report.json"),
+            Path::new("/dest/report.json"),
+        );
+    }
+
+    #[test]
+    fn safe_dest_path_cannot_escape() {
+        let base = Path::new("/dest");
+        // .. and . segments are dropped, so the result stays under /dest.
+        assert_eq!(
+            safe_dest_path(base, "../../etc/passwd"),
+            Path::new("/dest/etc/passwd"),
+        );
+        assert_eq!(
+            safe_dest_path(base, "a/../../b/./c"),
+            Path::new("/dest/a/b/c"),
+        );
+        assert_eq!(safe_dest_path(base, "x\\..\\y"), Path::new("/dest/x/y"),);
+        // Nothing usable → safe fallback.
+        assert_eq!(safe_dest_path(base, "../.."), Path::new("/dest/download"));
+        assert_eq!(safe_dest_path(base, ""), Path::new("/dest/download"));
     }
 }

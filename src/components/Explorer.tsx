@@ -22,15 +22,21 @@ import {
   IconRefresh,
 } from "@tabler/icons-react";
 
-import type { KeyMatchStatus, ObjectInfo, TreeNode } from "../types";
+import type { ObjectInfo, TreeNode } from "../types";
 import {
+  buildDownloadPlan,
   buildTree,
   checkableAgeKeys,
-  collectKeys,
   formatBytes,
   formatDate,
+  type DownloadPlanItem,
 } from "../lib/tree";
-import { summarizeKeyChecks, type KeyCheckSummary } from "../lib/keycheck";
+import {
+  isFresh,
+  summarizeKeyChecks,
+  type CachedCheck,
+  type KeyCheckSummary,
+} from "../lib/keycheck";
 import { Wordmark } from "./Wordmark";
 import { api } from "../api";
 
@@ -42,13 +48,7 @@ interface Props {
   refreshing: boolean;
   onRefresh: () => void;
   onDisconnect: () => void;
-  onDownload: (keys: string[]) => void;
-}
-
-function uniqueKeys(nodes: NodeApi<TreeNode>[]): string[] {
-  const set = new Set<string>();
-  for (const n of nodes) for (const k of collectKeys(n.data)) set.add(k);
-  return [...set];
+  onDownload: (items: DownloadPlanItem[]) => void;
 }
 
 function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
@@ -104,25 +104,57 @@ export function Explorer({
     [objects, basePrefix],
   );
 
-  const selectedKeys = useMemo(() => uniqueKeys(selected), [selected]);
-  const count = selectedKeys.length;
-  const hasAge = useMemo(
-    () => selectedKeys.some((k) => k.toLowerCase().endsWith(".age")),
-    [selectedKeys],
+  const selectedNodes = useMemo(() => selected.map((n) => n.data), [selected]);
+  const plan = useMemo(() => buildDownloadPlan(selectedNodes), [selectedNodes]);
+  const fileCount = useMemo(
+    () => selectedNodes.filter((n) => !n.isFolder).length,
+    [selectedNodes],
   );
+  const folderCount = useMemo(
+    () => selectedNodes.filter((n) => n.isFolder).length,
+    [selectedNodes],
+  );
+  const hasAge = useMemo(
+    () => plan.some((p) => p.key.toLowerCase().endsWith(".age")),
+    [plan],
+  );
+
+  // What did the user actually pick — folders, files, or both? (A folder is
+  // not a file; we never call its contents "N files".)
+  const selectionLabel = [
+    folderCount > 0
+      ? `${folderCount} folder${folderCount === 1 ? "" : "s"}`
+      : null,
+    fileCount > 0 ? `${fileCount} file${fileCount === 1 ? "" : "s"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  // Button verb mirrors the selection: a directory vs a file, "& decrypt" only
+  // when at least one .age file is involved.
+  const downloadNoun =
+    folderCount > 0
+      ? fileCount === 0 && folderCount === 1
+        ? "directory"
+        : "items"
+      : fileCount === 1
+        ? "file"
+        : "files";
+  const downloadLabel = `Download ${downloadNoun}${hasAge ? " & decrypt" : ""}`;
 
   // Only directly-selected .age *files* are worth a key pre-check — never a
   // folder (see checkableAgeKeys).
   const checkableKeys = useMemo(
-    () => checkableAgeKeys(selected.map((n) => n.data)),
-    [selected],
+    () => checkableAgeKeys(selectedNodes),
+    [selectedNodes],
   );
 
   // Pre-flight: can the connected key decrypt the selected .age files?
-  // Results are cached per object key for the session — a header never changes
+  // Results are cached per object key with a TTL — a header never changes
   // within a listing, so re-visiting a file is instant (no request, no jank on
-  // fast navigation). The cache is cleared whenever the listing changes.
-  const checkCache = useRef<Map<string, KeyMatchStatus>>(new Map());
+  // fast navigation), while the TTL still re-probes after a while in case the
+  // object was replaced. The cache is also cleared when the listing changes.
+  const checkCache = useRef<Map<string, CachedCheck>>(new Map());
   useEffect(() => {
     checkCache.current.clear();
   }, [objects]);
@@ -136,9 +168,12 @@ export function Explorer({
       setChecking(false);
       return;
     }
-    // Show whatever we already know immediately (cache hit → no flicker).
-    setKeyStatus(summarizeKeyChecks(checkableKeys, checkCache.current));
-    const missing = checkableKeys.filter((k) => !checkCache.current.has(k));
+    // Show whatever we already know (fresh cache hits) immediately — no flicker.
+    const now = Date.now();
+    setKeyStatus(summarizeKeyChecks(checkableKeys, checkCache.current, now));
+    const missing = checkableKeys.filter(
+      (k) => !isFresh(checkCache.current.get(k), now),
+    );
     if (!missing.length) {
       setChecking(false);
       return;
@@ -150,8 +185,13 @@ export function Explorer({
         .checkKeys(missing)
         .then((results) => {
           if (cancelled) return;
-          for (const r of results) checkCache.current.set(r.key, r.status);
-          setKeyStatus(summarizeKeyChecks(checkableKeys, checkCache.current));
+          const at = Date.now();
+          for (const r of results) {
+            checkCache.current.set(r.key, { status: r.status, at });
+          }
+          setKeyStatus(
+            summarizeKeyChecks(checkableKeys, checkCache.current, Date.now()),
+          );
         })
         .catch(() => {
           /* keep the cached portion; transient errors shouldn't blank it */
@@ -194,9 +234,9 @@ export function Explorer({
 
         <Box flex={1} />
 
-        {count > 0 && (
+        {selectedNodes.length > 0 && (
           <Text className="selection-count">
-            {count} file{count === 1 ? "" : "s"}
+            {selectionLabel}
             {checking && (
               <Text span c="dimmed">
                 {" "}
@@ -222,10 +262,10 @@ export function Explorer({
         )}
         <Button
           leftSection={<IconDownload size={18} />}
-          disabled={count === 0}
-          onClick={() => onDownload(selectedKeys)}
+          disabled={plan.length === 0}
+          onClick={() => onDownload(plan)}
         >
-          {hasAge ? "Download & decrypt" : "Download"}
+          {downloadLabel}
         </Button>
         <Tooltip label="Close connection" withArrow>
           <ActionIcon variant="subtle" color="gray" onClick={onDisconnect} size="lg">

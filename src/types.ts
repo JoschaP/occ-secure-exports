@@ -62,6 +62,14 @@ export interface FileResult {
   bytes: number;
 }
 
+/** One file to download, with the destination path (relative to the chosen
+ *  folder) that preserves folder structure. `.age` is stripped from the final
+ *  segment; the backend sanitizes against path traversal regardless. */
+export interface DownloadItem {
+  key: string;
+  relPath: string;
+}
+
 /** A node in the bucket tree (folders are synthesized from key prefixes). */
 export interface TreeNode {
   id: string;

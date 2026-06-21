@@ -6,6 +6,7 @@ import type {
   ConnectionProfile,
   ConnectResult,
   Credentials,
+  DownloadItem,
   FileResult,
   KeyCheck,
   KeyPair,
@@ -45,8 +46,8 @@ export const api = {
 
   disconnect: () => invoke<void>("disconnect"),
 
-  downloadDecrypt: (keys: string[], destDir: string) =>
-    invoke<FileResult[]>("download_decrypt", { keys, destDir }),
+  downloadDecrypt: (items: DownloadItem[], destDir: string) =>
+    invoke<FileResult[]>("download_decrypt", { items, destDir }),
 };
 
 export function onProgress(cb: (e: ProgressEvent) => void): Promise<UnlistenFn> {

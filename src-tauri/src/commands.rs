@@ -78,6 +78,17 @@ pub struct FileResult {
     bytes: u64,
 }
 
+/// One file to download. `rel_path` is the destination path relative to the
+/// chosen folder (folder structure to preserve), with `.age` already stripped
+/// from the final segment by the frontend. The backend sanitizes it against
+/// path traversal regardless (see `download::safe_dest_path`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadItem {
+    pub key: String,
+    pub rel_path: String,
+}
+
 // ---- helpers --------------------------------------------------------------
 
 fn config_dir(app: &AppHandle) -> AppResult<PathBuf> {
@@ -363,7 +374,7 @@ pub async fn disconnect(state: State<'_, AppState>) -> AppResult<()> {
 pub async fn download_decrypt(
     app: AppHandle,
     state: State<'_, AppState>,
-    keys: Vec<String>,
+    items: Vec<DownloadItem>,
     dest_dir: String,
 ) -> AppResult<Vec<FileResult>> {
     let (client, bucket, identities) = {
@@ -377,10 +388,11 @@ pub async fn download_decrypt(
     };
 
     let dest = PathBuf::from(dest_dir);
-    let mut results = Vec::with_capacity(keys.len());
+    let mut results = Vec::with_capacity(items.len());
 
-    for key in keys {
-        let dest_path = dest.join(download::plaintext_file_name(&key));
+    for item in items {
+        let DownloadItem { key, rel_path } = item;
+        let dest_path = download::safe_dest_path(&dest, &rel_path);
         let progress = progress_emitter(app.clone(), key.clone());
 
         let outcome = download::download_and_decrypt(

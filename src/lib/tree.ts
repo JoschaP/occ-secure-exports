@@ -77,6 +77,46 @@ export function checkableAgeKeys(
     .filter((k) => k.toLowerCase().endsWith(".age"));
 }
 
+/** A single file to download: its object key + the destination path relative
+ *  to the chosen folder, with `.age` stripped from the final segment. */
+export interface DownloadPlanItem {
+  key: string;
+  relPath: string;
+}
+
+const stripAge = (name: string) => name.replace(/\.age$/i, "");
+
+function planForNode(node: TreeNode, prefix: string): DownloadPlanItem[] {
+  if (!node.isFolder) {
+    return node.key
+      ? [{ key: node.key, relPath: prefix + stripAge(node.name) }]
+      : [];
+  }
+  // A selected folder becomes a top-level directory at the destination, with
+  // its substructure preserved beneath it.
+  const childPrefix = `${prefix}${node.name}/`;
+  return (node.children ?? []).flatMap((c) => planForNode(c, childPrefix));
+}
+
+/**
+ * Build the download plan for a selection. Files land flat (just their name);
+ * folders preserve their structure under a top-level directory named after the
+ * folder. Duplicate keys (e.g. a folder and a file inside it both selected)
+ * are de-duplicated, keeping the first occurrence.
+ */
+export function buildDownloadPlan(nodes: TreeNode[]): DownloadPlanItem[] {
+  const seen = new Set<string>();
+  const out: DownloadPlanItem[] = [];
+  for (const node of nodes) {
+    for (const item of planForNode(node, "")) {
+      if (seen.has(item.key)) continue;
+      seen.add(item.key);
+      out.push(item);
+    }
+  }
+  return out;
+}
+
 export function formatBytes(n?: number): string {
   if (n === undefined) return "";
   if (n < 1024) return `${n} B`;

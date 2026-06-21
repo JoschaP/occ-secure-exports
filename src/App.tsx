@@ -21,7 +21,8 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import { api, onFileDone, onProgress } from "./api";
 import type { ConnectionProfile, ConnectResult, Credentials } from "./types";
-import { formatBytes } from "./lib/tree";
+import { formatBytes, type DownloadPlanItem } from "./lib/tree";
+import { useIdleDisconnect } from "./hooks/useIdleDisconnect";
 import { ProfileList } from "./components/ProfileList";
 import { ConnectionForm } from "./components/ConnectionForm";
 import { Explorer } from "./components/Explorer";
@@ -43,9 +44,6 @@ interface DlState {
   dest: string;
   items: Record<string, DlItem>;
 }
-
-const fileName = (key: string) =>
-  (key.split("/").pop() || key).replace(/\.age$/, "");
 
 // Compact for the connection screen, roomier once a bucket is open.
 async function resizeWindow(mode: "compact" | "explorer") {
@@ -191,17 +189,29 @@ export default function App() {
   }
 
   async function connectFromList(p: ConnectionProfile) {
+    // Connect straight from the stored secrets instead of pre-checking with
+    // secret_status — that second keychain read triggers an extra OS password
+    // prompt on unsigned builds. If the secrets aren't stored, the backend
+    // reports it and we fall back to the form to collect them.
+    setConnectingId(p.id);
     try {
-      const s = await api.secretStatus(p.id);
-      if (s.hasSecret && s.hasKey) {
-        await doConnect(p, {});
-      } else {
+      const res = await api.connect(p, {});
+      const objs = await api.listObjects(res.basePrefix || undefined);
+      setSession(res);
+      setObjects(objs);
+      setView("explorer");
+      void resizeWindow("explorer");
+      reloadProfiles();
+    } catch (e) {
+      if (/No (secret access key|private key) available/i.test(String(e))) {
         setEditing(p);
         setInjectedKey(null);
         setView("form");
+      } else {
+        fail("Could not connect", e);
       }
-    } catch (e) {
-      fail("Could not open connection", e);
+    } finally {
+      setConnectingId(null);
     }
   }
 
@@ -291,7 +301,8 @@ export default function App() {
     }
   }
 
-  async function handleDownload(keys: string[]) {
+  async function handleDownload(plan: DownloadPlanItem[]) {
+    if (!plan.length) return;
     const dir = await open({
       directory: true,
       multiple: false,
@@ -299,12 +310,13 @@ export default function App() {
     });
     if (!dir || Array.isArray(dir)) return;
     const items: Record<string, DlItem> = {};
-    for (const k of keys) {
-      items[k] = { name: fileName(k), done: 0, total: 0, status: "running" };
+    for (const p of plan) {
+      // Show the relative path so folder structure is visible while it runs.
+      items[p.key] = { name: p.relPath, done: 0, total: 0, status: "running" };
     }
     setDl({ open: true, dest: dir, items });
     try {
-      await api.downloadDecrypt(keys, dir);
+      await api.downloadDecrypt(plan, dir);
     } catch (e) {
       fail("Download failed", e);
     }
@@ -313,6 +325,24 @@ export default function App() {
   const dlItems = Object.values(dl.items);
   const allDone =
     dlItems.length > 0 && dlItems.every((i) => i.status !== "running");
+  const downloading = dlItems.some((i) => i.status === "running");
+
+  // Drop the session (and the in-memory key) after inactivity. A running
+  // download keeps it alive so a long transfer is never interrupted.
+  useIdleDisconnect({
+    enabled: view === "explorer" && !!session,
+    busy: downloading,
+    onIdle: () => {
+      void disconnect();
+      notifications.show({
+        color: "yellow",
+        icon: <IconAlertTriangle size={18} />,
+        title: "Disconnected",
+        message: "The connection was closed after inactivity.",
+        autoClose: 5000,
+      });
+    },
+  });
 
   return (
     <>

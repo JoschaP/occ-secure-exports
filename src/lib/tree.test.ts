@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTree, checkableAgeKeys, collectKeys } from "./tree";
+import {
+  buildDownloadPlan,
+  buildTree,
+  checkableAgeKeys,
+  collectKeys,
+} from "./tree";
 import type { ObjectInfo } from "../types";
 
 const objects: ObjectInfo[] = [
@@ -56,5 +61,34 @@ describe("checkableAgeKeys", () => {
     expect(
       checkableAgeKeys([{ isFolder: false, key: "x/A.JSON.AGE" }]),
     ).toEqual(["x/A.JSON.AGE"]);
+  });
+});
+
+describe("buildDownloadPlan", () => {
+  const tree = buildTree(objects); // acme/{api/{2026-06-20/a.json.age, manifest.json}, README.txt}
+  const acme = tree.find((n) => n.name === "acme")!;
+  const api = acme.children!.find((n) => n.name === "api")!;
+
+  it("downloads a single file flat (name only, .age stripped)", () => {
+    const dateDir = api.children!.find((n) => n.name === "2026-06-20")!;
+    const file = dateDir.children!.find((n) => n.name === "a.json.age")!;
+    expect(buildDownloadPlan([file])).toEqual([
+      { key: "acme/api/2026-06-20/a.json.age", relPath: "a.json" },
+    ]);
+  });
+
+  it("preserves structure under a selected folder as a top-level dir", () => {
+    expect(buildDownloadPlan([acme])).toEqual([
+      { key: "acme/api/2026-06-20/a.json.age", relPath: "acme/api/2026-06-20/a.json" },
+      { key: "acme/api/manifest.json", relPath: "acme/api/manifest.json" },
+      { key: "acme/README.txt", relPath: "acme/README.txt" },
+    ]);
+  });
+
+  it("de-duplicates when a folder and a file inside it are both selected", () => {
+    const file = api.children!.find((n) => n.name === "manifest.json")!;
+    const plan = buildDownloadPlan([api, file]);
+    const keys = plan.map((p) => p.key);
+    expect(new Set(keys).size).toBe(keys.length); // no dupes
   });
 });
