@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/JoschaP/occ-companion/compare/v0.4.0...v0.5.0) (2026-06-21)
+
+
+### Features
+
+* new app icon — OCC document with a padlock ([1b7387e](https://github.com/JoschaP/occ-companion/commit/1b7387e6cff7a4dec7065da3fd20bcc8bfca21f7))
+
 # [0.4.0](https://github.com/JoschaP/occ-companion/compare/v0.3.0...v0.4.0) (2026-06-21)
 
 
